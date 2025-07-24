@@ -25,6 +25,7 @@ wheels/
 .env
 .env*
 !.env.example
+.gwen-env
 .venv
 env/
 venv/
