@@ -1,3 +1,0 @@
-OPENAI_BASE_URL=https://openrouter.ai/api/v1
-OPENAI_API_KEY=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
-OPENAI_MODEL=qwen/qwen3-coder
