@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Story Visualizer</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding: 20px; }
+        .card { margin-bottom: 20px; }
+        .scene-card { margin-bottom: 30px; }
+        .generated-content { margin-top: 20px; }
+        .processing-spinner {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">Story Visualizer</h1>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5>Upload Your Story</h5>
+            </div>
+            <div class="card-body">
+                <form id="storyForm">
+                    <div class="mb-3">
+                        <label for="storyText" class="form-label">Story Text</label>
+                        <textarea class="form-control" id="storyText" name="story_text" rows="10" 
+                            placeholder="Paste your short story here..."></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="imageModel" class="form-label">Image Generation Model</label>
+                        <select class="form-select" id="imageModel" name="image_model">
+                            <option value="gemini">Google Gemini</option>
+                            <option value="dalle">OpenAI DALL-E</option>
+                            <option value="stability">Stable Diffusion</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="processBtn">Process Story</button>
+                </form>
+                
+                <div class="processing-spinner" id="processingSpinner">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Processing...</span>
+                    </div>
+                    <p class="mt-2">Processing your story. This may take a few minutes...</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="results" class="generated-content" style="display: none;">
+            <h2>Generated Story Visualization</h2>
+            <div id="storyScenes"></div>
+            <div class="text-center mt-4" id="videoContainer" style="display: none;">
+                <h3>Final Video</h3>
+                <video id="finalVideo" controls width="100%" style="max-width: 800px;">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="mt-3">
+                    <button class="btn btn-success" id="downloadVideoBtn">Download Final Video</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('storyForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const storyText = document.getElementById('storyText').value;
+            const imageModel = document.getElementById('imageModel').value;
+            
+            if (!storyText.trim()) {
+                alert('Please enter a story');
+                return;
+            }
+            
+            // Show processing spinner
+            document.getElementById('processingSpinner').style.display = 'block';
+            document.getElementById('processBtn').disabled = true;
+            
+            try {
+                const formData = new FormData();
+                formData.append('story_text', storyText);
+                formData.append('image_model', imageModel);
+                
+                const response = await fetch('/api/process', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Display results
+                displayResults(result);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error processing story: ' + error.message);
+            } finally {
+                // Hide processing spinner
+                document.getElementById('processingSpinner').style.display = 'none';
+                document.getElementById('processBtn').disabled = false;
+            }
+        });
+        
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+            const scenesDiv = document.getElementById('storyScenes');
+            const downloadBtn = document.getElementById('downloadVideoBtn');
+            const videoContainer = document.getElementById('videoContainer');
+            const finalVideo = document.getElementById('finalVideo');
+            
+            scenesDiv.innerHTML = '';
+            
+            if (data.scenes && data.scenes.length > 0) {
+                data.scenes.forEach(scene => {
+                    const sceneCard = document.createElement('div');
+                    sceneCard.className = 'card scene-card';
+                    sceneCard.innerHTML = `
+                        <div class="card-header">
+                            <h5>Scene ${scene.scene_number}: ${scene.summary}</h5>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Setting:</strong> ${scene.setting}</p>
+                            <p><strong>Tone:</strong> ${scene.tone}</p>
+                            <p><strong>Characters:</strong> ${scene.characters_present ? scene.characters_present.join(', ') : 'None'}</p>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Generated Image:</h6>
+                                    ${scene.image_url ? `<img src="${scene.image_url}" class="img-fluid" alt="Scene Image">` : '<p>No image generated</p>'}
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Generated Audio:</h6>
+                                    ${scene.audio_url ? `<audio controls><source src="${scene.audio_url}" type="audio/wav">Your browser does not support the audio element.</audio>` : '<p>No audio generated</p>'}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    scenesDiv.appendChild(sceneCard);
+                });
+                
+                resultsDiv.style.display = 'block';
+                
+                // Show video and download button if video was generated
+                if (data.video_id) {
+                    // Set the video source to stream from the API
+                    finalVideo.src = `/api/video/${data.video_id}`;
+                    videoContainer.style.display = 'block';
+                    
+                    downloadBtn.onclick = function() {
+                        // Create a temporary link to stream the video
+                        const link = document.createElement('a');
+                        link.href = `/api/video/${data.video_id}`;
+                        link.download = 'story_visualization.mp4';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    };
+                }
+                
+                // Scroll to results
+                resultsDiv.scrollIntoView({ behavior: 'smooth' });
+            } else {
+                scenesDiv.innerHTML = '<p>No scenes were generated.</p>';
+                resultsDiv.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
