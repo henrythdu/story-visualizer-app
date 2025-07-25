@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Story Visualizer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --bs-body-bg: #121212;
+            --bs-body-color: #e0e0e0;
+            --bs-card-bg: #1e1e1e;
+            --bs-card-border-color: #333;
+            --bs-form-control-bg: #2d2d2d;
+            --bs-form-control-color: #e0e0e0;
+            --bs-form-control-border-color: #444;
+            --bs-btn-primary-bg: #375a7f;
+            --bs-btn-primary-border-color: #375a7f;
+            --bs-btn-primary-hover-bg: #2c4a69;
+            --bs-btn-primary-hover-border-color: #2c4a69;
+        }
+        
+        body {
+            background-color: var(--bs-body-bg);
+            color: var(--bs-body-color);
+            min-height: 100vh;
+            padding-bottom: 2rem;
+        }
+        
+        .card {
+            background-color: var(--bs-card-bg);
+            border-color: var(--bs-card-border-color);
+        }
+        
+        .form-control, .form-select {
+            background-color: var(--bs-form-control-bg);
+            color: var(--bs-form-control-color);
+            border-color: var(--bs-form-control-border-color);
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background-color: var(--bs-form-control-bg);
+            color: var(--bs-form-control-color);
+            border-color: #666;
+            box-shadow: 0 0 0 0.25rem rgba(55, 90, 127, 0.25);
+        }
+        
+        .btn-primary {
+            background-color: var(--bs-btn-primary-bg);
+            border-color: var(--bs-btn-primary-border-color);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--bs-btn-primary-hover-bg);
+            border-color: var(--bs-btn-primary-hover-border-color);
+        }
+        
+        .processing-spinner {
+            display: none;
+        }
+        
+        #videoContainer {
+            display: none;
+        }
+        
+        video {
+            max-width: 100%;
+            border-radius: 0.375rem;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #375a7f, #1e1e1e);
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 0 0 1rem 1rem;
+        }
+        
+        .header h1 {
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .theme-toggle {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="text-white mb-0">Story Visualizer</h1>
+                <button id="themeToggle" class="btn btn-outline-light" title="Toggle theme">
+                    <i class="bi bi-moon-fill"></i>
+                </button>
+            </div>
+            <p class="text-white-50 mt-2 mb-0">Transform your stories into visual narratives</p>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">Enter Your Story</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="storyForm">
+                            <div class="mb-3">
+                                <label for="storyText" class="form-label">Story Text</label>
+                                <textarea class="form-control" id="storyText" name="story_text" rows="8" 
+                                    placeholder="Paste your short story here..."></textarea>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary" id="processBtn">
+                                    <i class="bi bi-play-circle me-2"></i>Visualize Story
+                                </button>
+                            </div>
+                        </form>
+                        
+                        <div class="processing-spinner text-center my-4" id="processingSpinner">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Processing...</span>
+                            </div>
+                            <p class="mt-2 mb-0">Creating your visual story... This may take a minute.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="videoContainer" class="card shadow mt-4">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">Your Visualized Story</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center">
+                            <video id="finalVideo" controls></video>
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-center mt-3">
+                            <button class="btn btn-success me-md-2" id="downloadBtn">
+                                <i class="bi bi-download me-2"></i>Download Video
+                            </button>
+                            <button class="btn btn-secondary" id="newStoryBtn">
+                                <i class="bi bi-plus-circle me-2"></i>Create Another
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('storyForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const storyText = document.getElementById('storyText').value;
+            const processBtn = document.getElementById('processBtn');
+            const processingSpinner = document.getElementById('processingSpinner');
+            
+            if (!storyText.trim()) {
+                alert('Please enter a story');
+                return;
+            }
+            
+            // Show processing spinner and disable button
+            processingSpinner.style.display = 'block';
+            processBtn.disabled = true;
+            processBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing...';
+            
+            try {
+                const formData = new FormData();
+                formData.append('story_text', storyText);
+                
+                const response = await fetch('/api/process', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Display the video
+                displayVideo(result.video_id);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error processing story: ' + error.message);
+            } finally {
+                // Hide processing spinner and enable button
+                processingSpinner.style.display = 'none';
+                processBtn.disabled = false;
+                processBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Visualize Story';
+            }
+        });
+        
+        function displayVideo(videoId) {
+            const videoContainer = document.getElementById('videoContainer');
+            const finalVideo = document.getElementById('finalVideo');
+            const downloadBtn = document.getElementById('downloadBtn');
+            
+            // Set video source
+            finalVideo.src = `/api/video/${videoId}`;
+            
+            // Show video container
+            videoContainer.style.display = 'block';
+            
+            // Scroll to video
+            videoContainer.scrollIntoView({ behavior: 'smooth' });
+            
+            // Set up download button
+            downloadBtn.onclick = function() {
+                const link = document.createElement('a');
+                link.href = `/api/video/${videoId}`;
+                link.download = 'story_visualization.mp4';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+        }
+        
+        // New story button
+        document.getElementById('newStoryBtn').addEventListener('click', function() {
+            document.getElementById('videoContainer').style.display = 'none';
+            document.getElementById('storyText').value = '';
+            document.getElementById('storyText').focus();
+        });
+        
+        // Theme toggle
+        document.getElementById('themeToggle').addEventListener('click', function() {
+            document.body.classList.toggle('light-theme');
+            const icon = this.querySelector('i');
+            if (document.body.classList.contains('light-theme')) {
+                icon.classList.remove('bi-moon-fill');
+                icon.classList.add('bi-sun-fill');
+            } else {
+                icon.classList.remove('bi-sun-fill');
+                icon.classList.add('bi-moon-fill');
+            }
+        });
+    </script>
+</body>
+</html>
