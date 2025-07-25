@@ -25,15 +25,13 @@ except ImportError:
     genai = None
     types = None
 
-# TTS for audio generation
+# FastRTC for TTS
 try:
-    from TTS.api import TTS
-    import torch
-    TTS_AVAILABLE = True
+    from fastrtc import get_tts_model
+    FASTRTC_AVAILABLE = True
 except ImportError:
-    TTS_AVAILABLE = False
-    TTS = None
-    torch = None
+    FASTRTC_AVAILABLE = False
+    get_tts_model = None
 
 from models.story import StoryAnalysisState
 from config.settings import Settings
@@ -75,18 +73,17 @@ def initialize_models(api_key: Optional[str] = None, api_url: Optional[str] = No
         if not GOOGLE_GENAI_AVAILABLE:
             print("⚠️ Google GenAI library not available. Using mock image generation.")
     
-    # Initialize TTS model
-    if TTS_AVAILABLE:
+    # Initialize FastRTC TTS model
+    if FASTRTC_AVAILABLE:
         try:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            tts_model = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC_ph", progress_bar=False).to(device)
-            print("TTS model initialized")
+            tts_model = get_tts_model
+            print("FastRTC TTS model initialized")
         except Exception as e:
-            print(f"Error initializing TTS model: {e}")
+            print(f"Error initializing FastRTC TTS model: {e}")
             tts_model = None
     else:
         tts_model = None
-        print("⚠️ TTS library not available. Using mock audio generation.")
+        print("⚠️ FastRTC library not available. Using mock audio generation.")
 
 def cleanup_old_videos():
     """
@@ -164,22 +161,22 @@ def generate_mock_image(scene_description: str, scene_num: int, output_path: str
         print(f"Error generating mock image for scene {scene_num}: {e}")
         return False
 
-def generate_audio_with_tts(text: str, output_path: str) -> bool:
+def generate_audio_with_fastrtc(text: str, output_path: str) -> bool:
     """
-    Generate audio using TTS model
+    Generate audio using FastRTC TTS model
     """
     if not tts_model:
         return False
     
     try:
-        tts_model.tts_to_file(text=text, file_path=output_path)
-        if torch.cuda.is_available():
-            import gc
-            torch.cuda.empty_cache()
-            gc.collect()
+        # Generate audio using FastRTC
+        sample_rate, audio_data = tts_model(text)
+        
+        # Write the WAV file
+        write(output_path, sample_rate, audio_data)
         return True
     except Exception as e:
-        print(f"Error generating audio with TTS: {e}")
+        print(f"Error generating audio with FastRTC: {e}")
         return False
 
 def generate_mock_audio(scene_text: str, output_path: str):
@@ -454,19 +451,19 @@ async def process_story(story_text: str, image_model: str = "gemini",
             scene['image_url'] = None
             log.append(f"Failed to generate image for scene {scene_num}")
         
-        # Generate audio - try TTS first, fallback to mock
+        # Generate audio - try FastRTC first, fallback to mock
         audio_filename = f"scene_{scene_num}_audio.wav"
         audio_path = os.path.join(audio_output_dir, audio_filename)
         
         audio_generated = False
         if tts_model:
-            audio_generated = generate_audio_with_tts(scene_text, audio_path)
+            audio_generated = generate_audio_with_fastrtc(scene_text, audio_path)
             if audio_generated:
-                log.append(f"Generated audio using TTS for scene {scene_num}")
+                log.append(f"Generated audio using FastRTC for scene {scene_num}")
             else:
-                log.append(f"Failed to generate audio with TTS for scene {scene_num}, using mock")
+                log.append(f"Failed to generate audio with FastRTC for scene {scene_num}, using mock")
         
-        # If TTS failed or not available, use mock
+        # If FastRTC failed or not available, use mock
         if not audio_generated:
             audio_generated = generate_mock_audio(scene_text, audio_path)
         
