@@ -7,12 +7,16 @@ from datetime import datetime, timedelta
 import uuid
 from contextlib import asynccontextmanager
 import io
+import json
 
 # Import the video creation function
 from services.create_video import create_video
 
 # In-memory storage for video data
 video_storage = {}
+
+# In-memory storage for logs
+log_storage = {}
 
 # Cleanup old videos periodically
 async def cleanup_videos():
@@ -26,6 +30,9 @@ async def cleanup_videos():
             
             for key in expired_keys:
                 del video_storage[key]
+                # Also clean up logs
+                if key in log_storage:
+                    del log_storage[key]
                 
         except Exception as e:
             print(f"Error during video cleanup: {e}")
@@ -57,19 +64,42 @@ async def read_root(request: Request):
 @app.post("/api/process")
 async def process_story(story_text: str = Form(...)):
     try:
-        # Create video from story using your function
-        video_clip = create_video(story_text)
+        # Generate a unique ID for this processing session
+        process_id = str(uuid.uuid4())
         
-        # Generate video data in memory
-        video_buffer = io.BytesIO()
+        # Initialize log storage for this process
+        log_storage[process_id] = []
+        
+        # Create video from story using your function
+        # We'll need to modify this to capture logs
+        video_clip = create_video(story_text, process_id)
+        
+        # Generate video data in memory using a temporary approach
+        import tempfile
+        import os
+        
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmpfile:
+            temp_filename = tmpfile.name
+            
+        # Write video to temporary file
         video_clip.write_videofile(
-            video_buffer,
+            temp_filename,
             codec='libx264',
             fps=24,
             threads=4,
             logger=None
         )
-        video_data = video_buffer.getvalue()
+        
+        # Read the video data from the temporary file
+        with open(temp_filename, 'rb') as f:
+            video_data = f.read()
+        
+        # Clean up the temporary file
+        os.unlink(temp_filename)
+        
+        # Debug: Check the size of video_data
+        print(f"Video data size: {len(video_data)} bytes")
         
         # Store video with a unique ID
         video_id = str(uuid.uuid4())
@@ -81,14 +111,18 @@ async def process_story(story_text: str = Form(...)):
         # Clean up the clip
         video_clip.close()
         
-        return {"video_id": video_id}
+        return {"video_id": video_id, "process_id": process_id}
     except Exception as e:
+        print(f"Error in process_story: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/video/{video_id}")
 async def stream_video(video_id: str):
     if video_id in video_storage:
         video_info = video_storage[video_id]
+        print(f"Streaming video {video_id} with size: {len(video_info['data'])} bytes")
         return Response(
             content=video_info['data'], 
             media_type="video/mp4",
@@ -98,6 +132,21 @@ async def stream_video(video_id: str):
         )
     else:
         raise HTTPException(status_code=404, detail="Video not found")
+
+@app.get("/api/logs/{process_id}")
+async def stream_logs(process_id: str):
+    async def log_generator():
+        sent_logs = 0
+        while True:
+            if process_id in log_storage:
+                logs = log_storage[process_id]
+                # Send new logs
+                for i in range(sent_logs, len(logs)):
+                    yield f"data: {json.dumps({'message': logs[i]})}\n\n"
+                sent_logs = len(logs)
+            await asyncio.sleep(1)  # Check for new logs every second
+    
+    return StreamingResponse(log_generator(), media_type="text/event-stream")
 
 if __name__ == "__main__":
     import uvicorn

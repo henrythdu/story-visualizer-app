@@ -35,6 +35,12 @@ except ImportError:
 from models.story import StoryAnalysisState
 from config.settings import Settings
 
+# Import log storage from main
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from main import log_storage
+
 settings = Settings()
 
 # In-memory storage for video data (in a production app, you might use Redis or similar)
@@ -45,6 +51,22 @@ video_storage = {}
 llm = None
 genai_client = None
 tts_model = None
+
+# Process ID for logging
+current_process_id = None
+
+def set_process_id(process_id):
+    """Set the current process ID for logging"""
+    global current_process_id
+    current_process_id = process_id
+
+def log_message(message):
+    """Log a message to the current process log"""
+    if current_process_id and current_process_id in log_storage:
+        log_storage[current_process_id].append(message)
+        print(message)  # Also print to console for debugging
+    else:
+        print(message)  # Fallback to console printing
 
 def initialize_models(api_key: Optional[str] = None):
     """
@@ -61,14 +83,14 @@ def initialize_models(api_key: Optional[str] = None):
         try:
             os.environ["GOOGLE_API_KEY"] = google_api_key
             genai_client = genai.Client()
-            print(f"Google GenAI Image Generation client initialized with model: {image_model}")
+            log_message(f"Google GenAI Image Generation client initialized with model: {image_model}")
         except Exception as e:
-            print(f"Error initializing Google GenAI Image Generation client: {e}")
+            log_message(f"Error initializing Google GenAI Image Generation client: {e}")
             genai_client = None
     else:
         genai_client = None
         if not google_api_key:
-            print("⚠️ Google API key not provided. Using mock image generation.")
+            log_message("⚠️ Google API key not provided. Using mock image generation.")
     
     # Initialize LLM model
     if google_api_key and GOOGLE_GENAI_AVAILABLE:
@@ -84,27 +106,27 @@ def initialize_models(api_key: Optional[str] = None):
             #                 model_name="google/gemini-2.5-pro-exp-03-25"
             #                 )
             
-            print(f"Google GenAI LLM initialized with model: gemini-2.0-flash")
+            log_message(f"Google GenAI LLM initialized with model: gemini-2.0-flash")
         except Exception as e:
-            print(f"Error initializing Google GenAI LLM: {e}")
+            log_message(f"Error initializing Google GenAI LLM: {e}")
             llm = None
     else:
         llm = None
         if not google_api_key:
-            print("⚠️ Google API key not provided.")
+            log_message("⚠️ Google API key not provided.")
       
 
     # Initialize FastRTC TTS model
     if FASTRTC_AVAILABLE:
         try:
             tts_model = get_tts_model()
-            print("FastRTC TTS model initialized")
+            log_message("FastRTC TTS model initialized")
         except Exception as e:
-            print(f"Error initializing FastRTC TTS model: {e}")
+            log_message(f"Error initializing FastRTC TTS model: {e}")
             tts_model = None
     else:
         tts_model = None
-        print("⚠️ FastRTC library not available.")
+        log_message("⚠️ FastRTC library not available.")
 
 # --- 2. Define Nodes (Functions) ---
 
@@ -114,7 +136,7 @@ def read_story(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     log = state.get("processing_log", [])
     log.append("Reading story...")
-    print("--- Reading Story ---")
+    log_message("--- Reading Story ---")
     return {"processing_log": log}
 
 def analyze_characters(state: StoryAnalysisState) -> StoryAnalysisState:
@@ -123,7 +145,7 @@ def analyze_characters(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     log = state.get("processing_log", [])
     log.append("Analyzing characters using Gemini...")
-    print("--- Analyzing Characters (using Gemini) ---")
+    log_message("--- Analyzing Characters (using Gemini) ---")
     story = state["story_text"]
     characters_found = {}
 
@@ -156,10 +178,10 @@ Example JSON output format:
             elif details is None:
                  characters_found[char] = {"description": ""}
         log.append(f"Successfully analyzed characters. Found: {list(characters_found.keys())}")
-        print(f"Found characters: {characters_found}")
+        log_message(f"Found characters: {characters_found}")
     except Exception as e:
         log.append(f"Error analyzing characters: {e}")
-        print(f"Error during character analysis: {e}")
+        log_message(f"Error during character analysis: {e}")
 
     return {"characters": characters_found, "processing_log": log}
 
@@ -170,7 +192,7 @@ def generate_missing_descriptions(state: StoryAnalysisState) -> StoryAnalysisSta
     """
     log = state.get("processing_log", [])
     log.append("Checking for and generating missing descriptions using Gemini...")
-    print("--- Generating Missing Descriptions (using Gemini) ---")
+    log_message("--- Generating Missing Descriptions (using Gemini) ---")
     characters = state.get("characters", {})
     story = state["story_text"]
     updated_characters = characters.copy()
@@ -194,18 +216,18 @@ Output ONLY the generated description as a plain string."""),
             # Handle cases where the character entry might not be a dict (e.g., due to parsing error)
             elif not isinstance(details, dict):
                  log.append(f"Skipping description generation for '{name}' due to unexpected format: {details}")
-                 print(f"Warning: Skipping description generation for '{name}' due to unexpected format.")
+                 log_message(f"Warning: Skipping description generation for '{name}' due to unexpected format.")
                  # Ensure the entry is a dict for consistency, even if description remains missing
                  updated_characters[name] = {"description": ""}
 
 
     if not characters_to_generate:
         log.append("No missing descriptions to generate.")
-        print("No missing descriptions to generate.")
+        log_message("No missing descriptions to generate.")
         # Ensure the returned state always includes the characters dict
         return {"characters": updated_characters, "processing_log": log}
 
-    print(f"Attempting to generate descriptions for: {', '.join(characters_to_generate)}")
+    log_message(f"Attempting to generate descriptions for: {', '.join(characters_to_generate)}")
     for name in characters_to_generate:
         time.sleep(8) #Gemini-2.0-flash has rate limit of 10 per minute
         try:
@@ -219,10 +241,10 @@ Output ONLY the generated description as a plain string."""),
                  updated_characters[name] = {} # Initialize if somehow missing
             updated_characters[name]["description"] = generated_desc.strip()
             log.append(f"Successfully generated description for {name}.")
-            print(f"Generated description for {name}: {generated_desc.strip()}")
+            log_message(f"Generated description for {name}: {generated_desc.strip()}")
         except Exception as e:
             log.append(f"Error generating description for {name}: {e}")
-            print(f"Error generating description for {name}: {e}")
+            log_message(f"Error generating description for {name}: {e}")
             # Optionally set a default error description
             if name not in updated_characters:
                  updated_characters[name] = {}
@@ -237,7 +259,7 @@ def analyze_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     log = state.get("processing_log", [])
     log.append("Analyzing scenes using Gemini...")
-    print("--- Analyzing Scenes (using Gemini) ---")
+    log_message("--- Analyzing Scenes (using Gemini) ---")
     story = state["story_text"]
     character_names = list(state.get("characters", {}).keys())
     scenes_found = []
@@ -305,11 +327,11 @@ Example JSON output format:
 
 
         log.append(f"Successfully analyzed scenes. Found {len(scenes_found)} scenes.")
-        print(f"Found {len(scenes_found)} scenes.")
+        log_message(f"Found {len(scenes_found)} scenes.")
 
     except Exception as e:
         log.append(f"Error analyzing scenes: {e}")
-        print(f"Error during scene analysis: {e}")
+        log_message(f"Error during scene analysis: {e}")
         scenes_found = [] # Ensure it's an empty list on error
 
     return {"scenes": scenes_found, "processing_log": log}
@@ -321,7 +343,7 @@ def determine_overall_style(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     log = state.get("processing_log", [])
     log.append("Determining overall visual style using Gemini...")
-    print("--- Determining Overall Visual Style (using Gemini) ---")
+    log_message("--- Determining Overall Visual Style (using Gemini) ---")
     story = state["story_text"]
     suggested_style = None # Initialize
 
@@ -344,18 +366,18 @@ Output ONLY the suggested style descriptor string, prefixed with a space (e.g., 
              suggested_style = " " + suggested_style # Add prefix if missing
 
         log.append(f"Suggested overall style: '{suggested_style}'")
-        print(f"Suggested overall style: '{suggested_style}'")
+        log_message(f"Suggested overall style: '{suggested_style}'")
 
     except Exception as e:
         log.append(f"Error determining overall style: {e}")
-        print(f"Error determining overall style: {e}")
+        log_message(f"Error determining overall style: {e}")
         suggested_style = " illustration" # Fallback style on error
 
     # Ensure a fallback style if suggestion is empty or just the prefix
     if not suggested_style or suggested_style == " ":
         suggested_style = " illustration" # Default fallback style
         log.append(f"Using fallback style: '{suggested_style}'")
-        print(f"Using fallback style: '{suggested_style}'")
+        log_message(f"Using fallback style: '{suggested_style}'")
 
 
     return {"overall_style": suggested_style, "processing_log": log}
@@ -368,7 +390,7 @@ def generate_image_prompts(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     log = state.get("processing_log", [])
     log.append("Generating image prompts using Gemini...")
-    print("--- Generating Image Prompts (using Gemini) ---")
+    log_message("--- Generating Image Prompts (using Gemini) ---")
     scenes = state.get("scenes", [])
     characters_info = state.get("characters", {})
     # Get the determined overall style from the state
@@ -377,16 +399,16 @@ def generate_image_prompts(state: StoryAnalysisState) -> StoryAnalysisState:
 
     if not llm:
         log.append("LLM not available. Skipping image prompt generation.")
-        print("LLM not available. Skipping image prompt generation.")
+        log_message("LLM not available. Skipping image prompt generation.")
         return {"scenes": scenes, "processing_log": log}
 
     # Use a default style if none was determined or passed
     if not overall_style:
         overall_style = " illustration" # Default fallback style
         log.append(f"Overall style not found in state, using fallback: '{overall_style}'")
-        print(f"Overall style not found in state, using fallback: '{overall_style}'")
+        log_message(f"Overall style not found in state, using fallback: '{overall_style}'")
 
-    print(f"Using overall style for prompts: '{overall_style}'")
+    log_message(f"Using overall style for prompts: '{overall_style}'")
 
     prompt_template = ChatPromptTemplate.from_messages([
         ("system", """You are an expert prompt engineer for text-to-image models.
@@ -446,11 +468,11 @@ Tone: {tone}""")
             scene['image_prompt'] = final_image_prompt
             log.append(f"Generated image prompt for scene {scene_num}.")
             # Print the final prompt being used
-            print(f"Generated image prompt for scene {scene_num}: {final_image_prompt}")
+            log_message(f"Generated image prompt for scene {scene_num}: {final_image_prompt}")
 
         except Exception as e:
             log.append(f"Error generating image prompt for scene {scene_num}: {e}")
-            print(f"Error generating image prompt for scene {scene_num}: {e}")
+            log_message(f"Error generating image prompt for scene {scene_num}: {e}")
             scene['image_prompt'] = "Error generating image prompt."
 
         updated_scenes.append(scene)
@@ -465,14 +487,14 @@ def generate_images_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     log = state.get("processing_log", [])
     log.append("Generating images using Google GenAI...")
-    print("--- Generating Images (using Google GenAI) ---")
+    log_message("--- Generating Images (using Google GenAI) ---")
     scenes = state.get("scenes", [])
     updated_scenes = []
 
     # Ensure the GenAI client was initialized
     if not genai_client:
          log.append("Google GenAI Image Generation client not available. Skipping image generation.")
-         print("⚠️ Google GenAI Image Generation client not available. Skipping image generation.")
+         log_message("⚠️ Google GenAI Image Generation client not available. Skipping image generation.")
          # Add existing scenes back without image URLs
          for scene in scenes:
              scene['image_base64'] = None
@@ -486,7 +508,7 @@ def generate_images_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
         generated_image_base64  = None # Initialize path for this scene
 
         if image_prompt and "Error" not in image_prompt:
-            print(f"Attempting image generation for scene {scene_num}...")
+            log_message(f"Attempting image generation for scene {scene_num}...")
             try:
                 # Use the prompt directly as contents
                 contents = image_prompt
@@ -507,34 +529,34 @@ def generate_images_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
                     for part in response.candidates[0].content.parts:
                         # Check if the part has inline_data and if that data has a 'data' attribute
                         if hasattr(part, 'inline_data') and hasattr(part.inline_data, 'data'):
-                            print(f"Image data received for scene {scene_num}.")
+                            log_message(f"Image data received for scene {scene_num}.")
                             image_data = part.inline_data.data
                             try:
                             
                                
                                 # Save the image
                                 generated_image_base64 = image_data
-                                print(f"Saved image for scene {scene_num}")
+                                log_message(f"Saved image for scene {scene_num}")
                                 log.append(f"Generated and saved image for scene {scene_num}")
                                 image_saved = True
                                 break # Assuming only one image part per scene
                             except Exception as img_err:
                                 log.append(f"Error processing/saving image data for scene {scene_num}: {img_err}")
-                                print(f"Error processing/saving image data for scene {scene_num}: {img_err}")
+                                log_message(f"Error processing/saving image data for scene {scene_num}: {img_err}")
                                 # Keep generated_image_base64 as None
 
                 if not image_saved:
                      log.append(f"No valid image data found or saved in response for scene {scene_num}.")
-                     print(f"Warning: No valid image data found or saved in API response for scene {scene_num}.")
+                     log_message(f"Warning: No valid image data found or saved in API response for scene {scene_num}.")
 
             except Exception as e:
                 log.append(f"Error during image generation API call for scene {scene_num}: {e}")
-                print(f"Error during image generation API call for scene {scene_num}: {e}")
+                log_message(f"Error during image generation API call for scene {scene_num}: {e}")
                 # Keep generated_image_base64 as None
 
         else:
             log.append(f"Skipping image generation for scene {scene_num} due to missing or error in prompt.")
-            print(f"Skipping image generation for scene {scene_num} (invalid prompt).")
+            log_message(f"Skipping image generation for scene {scene_num} (invalid prompt).")
             # Keep generated_image_base64 as None
 
         # Update the scene info with the file path (or None if failed)
@@ -552,7 +574,7 @@ def generate_audio_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     log = state.get("processing_log", [])
     log.append("Generating audio ...")
-    print("--- Generating Audio ---")
+    log_message("--- Generating Audio ---")
     scenes = state.get("scenes", [])
     updated_scenes = []
 
@@ -564,7 +586,7 @@ def generate_audio_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
         generated_audio_array = None # Initialize path for this scene
 
         if scene_text:
-            print(f"Audio generation for scene {scene_num}...")
+            log_message(f"Audio generation for scene {scene_num}...")
             try:
                 
                 generated_audio_array = tts_model.tts(scene_text)    
@@ -572,16 +594,16 @@ def generate_audio_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
 
                 # ==========================================================
 
-                print(f"Saving audio for scene {scene_num}")
+                log_message(f"Saving audio for scene {scene_num}")
                 log.append(f"Audio generation for scene {scene_num}.")
 
             except Exception as e:
                 log.append(f"Error during audio generation for scene {scene_num}: {e}")
-                print(f"Error during audio generation for scene {scene_num}: {e}")
+                log_message(f"Error during audio generation for scene {scene_num}: {e}")
                 generated_audio_array = None # Indicate failure
         else:
             log.append(f"Skipping audio generation for scene {scene_num} due to missing scene text.")
-            print(f"Skipping audio generation for scene {scene_num} (missing text).")
+            log_message(f"Skipping audio generation for scene {scene_num} (missing text).")
             generated_audio_array = None # Ensure path is None if text is missing
 
         # Update the scene info with the file path (or None if failed)

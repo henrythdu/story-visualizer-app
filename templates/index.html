@@ -96,6 +96,21 @@
             margin-top: 1rem;
             display: none;
         }
+        
+        /* Log styling */
+        #logContainer {
+            font-family: 'Courier New', monospace;
+        }
+        
+        .log-entry {
+            margin-bottom: 0.25rem;
+            padding: 0.1rem 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .log-entry:last-child {
+            border-bottom: none;
+        }
     </style>
 </head>
 <body>
@@ -111,7 +126,7 @@
         </div>
     </div>
     
-    <div class="container">
+    <div class="container-fluid">
         <div class="row justify-content-center">
             <div class="col-lg-8">
                 <div class="card shadow">
@@ -163,11 +178,28 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Log Panel -->
+            <div class="col-lg-4">
+                <div class="card shadow">
+                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Processing Log</h5>
+                        <button id="clearLogBtn" class="btn btn-sm btn-outline-light">Clear</button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="logContainer" class="p-3" style="height: 400px; overflow-y: auto; background-color: #1e1e1e; font-family: monospace; font-size: 0.85rem; color: #e0e0e0;">
+                            <div id="logContent" class="mb-0"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        let eventSource = null;
+        
         document.getElementById('storyForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -175,6 +207,10 @@
             const processBtn = document.getElementById('processBtn');
             const processingSpinner = document.getElementById('processingSpinner');
             const errorMessage = document.getElementById('errorMessage');
+            const logContent = document.getElementById('logContent');
+            
+            // Clear previous logs
+            logContent.innerHTML = '';
             
             // Hide any previous error message
             errorMessage.style.display = 'none';
@@ -205,7 +241,10 @@
                 
                 const result = await response.json();
                 
-                // Display the video
+                // Start streaming logs
+                startLogStreaming(result.process_id);
+                
+                // Display the video when it's ready
                 displayVideo(result.video_id);
             } catch (error) {
                 console.error('Error:', error);
@@ -217,6 +256,35 @@
                 processBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Visualize Story';
             }
         });
+        
+        function startLogStreaming(processId) {
+            // Close any existing connection
+            if (eventSource) {
+                eventSource.close();
+            }
+            
+            // Create new EventSource connection
+            eventSource = new EventSource(`/api/logs/${processId}`);
+            
+            const logContent = document.getElementById('logContent');
+            const logContainer = document.getElementById('logContainer');
+            
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                const logEntry = document.createElement('div');
+                logEntry.textContent = data.message;
+                logEntry.className = 'log-entry';
+                logContent.appendChild(logEntry);
+                
+                // Scroll to bottom
+                logContainer.scrollTop = logContainer.scrollHeight;
+            };
+            
+            eventSource.onerror = function(event) {
+                console.error('Log streaming error:', event);
+                // Don't close the connection on error, as it might be temporary
+            };
+        }
         
         function displayVideo(videoId) {
             const videoContainer = document.getElementById('videoContainer');
@@ -254,6 +322,20 @@
             document.getElementById('videoContainer').style.display = 'none';
             document.getElementById('storyText').value = '';
             document.getElementById('storyText').focus();
+            
+            // Close log streaming
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            // Clear logs
+            document.getElementById('logContent').innerHTML = '';
+        });
+        
+        // Clear log button
+        document.getElementById('clearLogBtn').addEventListener('click', function() {
+            document.getElementById('logContent').innerHTML = '';
         });
         
         // Theme toggle

@@ -5,9 +5,10 @@ import base64
 import io
 from PIL import Image
 import numpy as np
+from io import BytesIO
 
-def create_video(story_text):
-    final_state = create_finalstate(story_text)
+def create_video(story_text, process_id=None):
+    final_state = create_finalstate(story_text, process_id)
     # -----------------------------------------------------
 
     scene_clips = [] # To store video clips for each scene
@@ -46,17 +47,17 @@ def create_video(story_text):
                 # --- Create image clip ---
                 # Set image duration to match audio duration
 
-                image = Image.open(io.BytesIO(base64.b64decode(image_base64)))
+                image = Image.open(BytesIO(image_base64))
                 # Convert to RGB if necessary (MoviePy works best with RGB)
                 if image.mode != 'RGB':
                     image = image.convert('RGB')
                 
                 # Convert PIL image to numpy array
                 image_array = np.array(image)
-                img_clip = ImageClip(image_array).set_duration(scene_duration)
+                img_clip = ImageClip(image_array).with_duration(scene_duration)
 
                 # --- Set audio for the image clip ---
-                video_clip = img_clip.set_audio(audio_clip)
+                video_clip = img_clip.with_audio(audio_clip)
 
                 # Add the completed scene clip to our list
                 scene_clips.append(video_clip)
