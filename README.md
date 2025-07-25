@@ -41,6 +41,10 @@ A web application that transforms short stories into audio-visual experiences us
    Create a `.env` file in the project root with the following variables:
    ```env
    GOOGLE_API_KEY=your_google_api_key_here
+   OPENROUTER_API_KEY = 
+   LLM_MODEL=gemini-2.0-flash
+   IMAGE_MODEL=gemini-2.0-flash-exp-image-generation
+ 
    ```
 
 ## Usage
