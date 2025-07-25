@@ -8,6 +8,9 @@ from typing import List, Dict, Optional
 import uuid
 from pathlib import Path
 from datetime import datetime, timedelta
+from PIL import Image, ImageDraw
+import numpy as np
+from scipy.io.wavfile import write
 
 # For video generation
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
@@ -37,6 +40,44 @@ def cleanup_old_videos():
         
     if expired_keys:
         print(f"Cleaned up {len(expired_keys)} old videos from storage")
+
+def generate_mock_image(scene_num: int, output_path: str):
+    """
+    Generate a mock image for testing when no API key is available
+    """
+    try:
+        # Create a simple colored image with text
+        image = Image.new('RGB', (640, 480), color='lightblue')
+        draw = ImageDraw.Draw(image)
+        draw.text((10, 10), f"Scene {scene_num} Visualization", fill='black')
+        draw.text((10, 30), "Mock Image Generated", fill='black')
+        image.save(output_path)
+        return True
+    except Exception as e:
+        print(f"Error generating mock image for scene {scene_num}: {e}")
+        return False
+
+def generate_mock_audio(scene_text: str, output_path: str):
+    """
+    Generate mock audio for testing when no TTS is available
+    """
+    try:
+        # Create a simple tone based on text length
+        sample_rate = 44100
+        # Duration based on text length (1 second per 100 characters, min 0.5s, max 5s)
+        duration = min(5.0, max(0.5, len(scene_text) / 100.0))
+        frequency = 440.0  # A4 note
+
+        # Generate the audio samples
+        t = np.linspace(0, duration, int(sample_rate * duration), False)
+        audio_data = np.sin(2 * np.pi * frequency * t)
+
+        # Write the WAV file
+        write(output_path, sample_rate, audio_data.astype(np.float32))
+        return True
+    except Exception as e:
+        print(f"Error generating mock audio: {e}")
+        return False
 
 def create_final_video(state: StoryAnalysisState) -> bytes:
     """
@@ -161,7 +202,10 @@ def create_final_video(state: StoryAnalysisState) -> bytes:
 
     return b""
 
-async def process_story(story_text: str, image_model: str = "gemini") -> StoryAnalysisState:
+async def process_story(story_text: str, image_model: str = "gemini", 
+                       api_key: Optional[str] = None, 
+                       api_url: Optional[str] = None, 
+                       api_model: Optional[str] = None) -> StoryAnalysisState:
     """
     Process a story through all steps and return the results.
     """
@@ -177,13 +221,53 @@ async def process_story(story_text: str, image_model: str = "gemini") -> StoryAn
                 "setting": "A magical forest",
                 "characters_present": [],
                 "tone": "mysterious",
-                "image_url": "/output/images/scene_1_image.png",
-                "audio_url": "/output/audio/scene_1_audio.wav"
+                "image_url": None,
+                "audio_url": None
             }
         ],
         "overall_style": None,
         "processing_log": []
     }
+    
+    log = initial_state["processing_log"]
+    
+    # Generate mock images and audio for testing
+    output_dir = settings.IMAGE_OUTPUT_DIR
+    os.makedirs(output_dir, exist_ok=True)
+    
+    audio_output_dir = settings.AUDIO_OUTPUT_DIR
+    os.makedirs(audio_output_dir, exist_ok=True)
+    
+    scenes = initial_state["scenes"]
+    updated_scenes = []
+    
+    for scene in scenes:
+        scene_num = scene.get('scene_number', 'N/A')
+        scene_text = scene.get('scene_text', '')
+        
+        # Generate mock image
+        image_filename = f"scene_{scene_num}_image.png"
+        image_path = os.path.join(output_dir, image_filename)
+        if generate_mock_image(scene_num, image_path):
+            scene['image_url'] = f"/output/images/{image_filename}"
+            log.append(f"Generated mock image for scene {scene_num}")
+        else:
+            scene['image_url'] = None
+            log.append(f"Failed to generate mock image for scene {scene_num}")
+        
+        # Generate mock audio
+        audio_filename = f"scene_{scene_num}_audio.wav"
+        audio_path = os.path.join(audio_output_dir, audio_filename)
+        if generate_mock_audio(scene_text, audio_path):
+            scene['audio_url'] = f"/output/audio/{audio_filename}"
+            log.append(f"Generated mock audio for scene {scene_num}")
+        else:
+            scene['audio_url'] = None
+            log.append(f"Failed to generate mock audio for scene {scene_num}")
+        
+        updated_scenes.append(scene)
+    
+    initial_state["scenes"] = updated_scenes
     
     # Create final video in memory
     video_data = create_final_video(initial_state)

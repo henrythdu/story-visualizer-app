@@ -15,11 +15,39 @@
             text-align: center;
             margin: 20px 0;
         }
+        .api-config {
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1 class="mb-4">Story Visualizer</h1>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5>API Configuration</h5>
+            </div>
+            <div class="card-body">
+                <div class="api-config">
+                    <div class="mb-3">
+                        <label for="apiKey" class="form-label">API Key</label>
+                        <input type="password" class="form-control" id="apiKey" name="api_key" placeholder="Enter your API key">
+                    </div>
+                    <div class="mb-3">
+                        <label for="apiUrl" class="form-label">API URL</label>
+                        <input type="text" class="form-control" id="apiUrl" name="api_url" placeholder="Enter API URL (optional)">
+                    </div>
+                    <div class="mb-3">
+                        <label for="apiModel" class="form-label">Model Name</label>
+                        <input type="text" class="form-control" id="apiModel" name="api_model" placeholder="Enter model name (optional)">
+                    </div>
+                </div>
+            </div>
+        </div>
         
         <div class="card">
             <div class="card-header">
@@ -76,6 +104,9 @@
             
             const storyText = document.getElementById('storyText').value;
             const imageModel = document.getElementById('imageModel').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const apiUrl = document.getElementById('apiUrl').value;
+            const apiModel = document.getElementById('apiModel').value;
             
             if (!storyText.trim()) {
                 alert('Please enter a story');
@@ -90,6 +121,11 @@
                 const formData = new FormData();
                 formData.append('story_text', storyText);
                 formData.append('image_model', imageModel);
+                
+                // Add API configuration if provided
+                if (apiKey) formData.append('api_key', apiKey);
+                if (apiUrl) formData.append('api_url', apiUrl);
+                if (apiModel) formData.append('api_model', apiModel);
                 
                 const response = await fetch('/api/process', {
                     method: 'POST',

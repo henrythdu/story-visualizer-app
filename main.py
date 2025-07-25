@@ -49,14 +49,17 @@ async def read_root(request: Request):
 @app.post("/api/process")
 async def process_story_api(
     story_text: str = Form(...),
-    image_model: str = Form("gemini")
+    image_model: str = Form("gemini"),
+    api_key: Optional[str] = Form(None),
+    api_url: Optional[str] = Form(None),
+    api_model: Optional[str] = Form(None)
 ):
     """
     Process a story and generate visualization
     """
     try:
-        # Process the story
-        result = await process_story(story_text, image_model)
+        # Process the story with API configuration
+        result = await process_story(story_text, image_model, api_key, api_url, api_model)
         return JSONResponse(content=result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
