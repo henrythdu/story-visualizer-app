@@ -263,128 +263,132 @@ def analyze_story_scenes(story_text: str) -> List[Dict]:
     
     return scenes
 
-def create_final_video(state: StoryAnalysisState) -> bytes:
+def create_final_video(state: StoryAnalysisState) -> Optional[bytes]:
     """
     Create a final video from the generated images and audio, returning video data in memory.
     """
-    log = state.get("processing_log", [])
-    scenes = state.get("scenes", [])
-    scene_clips = []
-    
-    print("Starting video creation process...")
-    log.append("Starting video creation process...")
-    
-    # Clean up old videos before creating a new one
-    cleanup_old_videos()
+    try:
+        log = state.get("processing_log", [])
+        scenes = state.get("scenes", [])
+        scene_clips = []
+        
+        print("Starting video creation process...")
+        log.append("Starting video creation process...")
+        
+        # Clean up old videos before creating a new one
+        cleanup_old_videos()
 
-    if isinstance(scenes, list):
-        for scene in scenes:
-            scene_num = scene.get('scene_number', 'Unknown')
-            image_path = scene.get('image_url')
-            audio_path = scene.get('audio_url')
+        if isinstance(scenes, list):
+            for scene in scenes:
+                scene_num = scene.get('scene_number', 'Unknown')
+                image_path = scene.get('image_url')
+                audio_path = scene.get('audio_url')
 
-            print(f"\nProcessing Scene {scene_num}...")
-            log.append(f"Processing Scene {scene_num}...")
-            
-            # Validate file paths
-            if not image_path:
-                print(f"  Warning: No image path provided for scene {scene_num}. Skipping scene.")
-                log.append(f"  Warning: No image path provided for scene {scene_num}. Skipping scene.")
-                continue
+                print(f"\nProcessing Scene {scene_num}...")
+                log.append(f"Processing Scene {scene_num}...")
                 
-            if not audio_path:
-                print(f"  Warning: No audio path provided for scene {scene_num}. Skipping scene.")
-                log.append(f"  Warning: No audio path provided for scene {scene_num}. Skipping scene.")
-                continue
+                # Validate file paths
+                if not image_path:
+                    print(f"  Warning: No image path provided for scene {scene_num}. Skipping scene.")
+                    log.append(f"  Warning: No image path provided for scene {scene_num}. Skipping scene.")
+                    continue
+                    
+                if not audio_path:
+                    print(f"  Warning: No audio path provided for scene {scene_num}. Skipping scene.")
+                    log.append(f"  Warning: No audio path provided for scene {scene_num}. Skipping scene.")
+                    continue
+                    
+                # Adjust paths for local file access
+                local_image_path = image_path.lstrip('/')
+                local_audio_path = audio_path.lstrip('/')
                 
-            # Adjust paths for local file access
-            local_image_path = image_path.lstrip('/')
-            local_audio_path = audio_path.lstrip('/')
-            
-            # Check if files exist
-            if not os.path.exists(local_image_path):
-                print(f"  Warning: Image file not found for scene {scene_num} at {local_image_path}. Skipping scene.")
-                log.append(f"  Warning: Image file not found for scene {scene_num} at {local_image_path}. Skipping scene.")
-                continue
-            if not os.path.exists(local_audio_path):
-                print(f"  Warning: Audio file not found for scene {scene_num} at {local_audio_path}. Skipping scene.")
-                log.append(f"  Warning: Audio file not found for scene {scene_num} at {local_audio_path}. Skipping scene.")
-                continue
+                # Check if files exist
+                if not os.path.exists(local_image_path):
+                    print(f"  Warning: Image file not found for scene {scene_num} at {local_image_path}. Skipping scene.")
+                    log.append(f"  Warning: Image file not found for scene {scene_num} at {local_image_path}. Skipping scene.")
+                    continue
+                if not os.path.exists(local_audio_path):
+                    print(f"  Warning: Audio file not found for scene {scene_num} at {local_audio_path}. Skipping scene.")
+                    log.append(f"  Warning: Audio file not found for scene {scene_num} at {local_audio_path}. Skipping scene.")
+                    continue
 
+                try:
+                    audio_clip = AudioFileClip(local_audio_path)
+                    scene_duration = audio_clip.duration
+                    if scene_duration <= 0:
+                         print(f"  Warning: Audio duration is zero or negative for scene {scene_num}. Skipping scene.")
+                         log.append(f"  Warning: Audio duration is zero or negative for scene {scene_num}. Skipping scene.")
+                         audio_clip.close()
+                         continue
+                    print(f"  Audio Duration: {scene_duration:.2f} seconds")
+                    log.append(f"  Audio Duration: {scene_duration:.2f} seconds")
+
+                    img_clip = ImageClip(local_image_path).set_duration(scene_duration)
+                    video_clip = img_clip.set_audio(audio_clip)
+                    scene_clips.append(video_clip)
+                    print(f"  Successfully created video clip for scene {scene_num}.")
+                    log.append(f"  Successfully created video clip for scene {scene_num}.")
+
+                except Exception as e:
+                    print(f"  Error processing scene {scene_num}: {e}")
+                    log.append(f"  Error processing scene {scene_num}: {e}")
+                    # Close clips if there was an error
+                    if 'audio_clip' in locals():
+                        audio_clip.close()
+
+        if scene_clips:
+            print(f"\nConcatenating {len(scene_clips)} scene clips...")
+            log.append(f"Concatenating {len(scene_clips)} scene clips...")
             try:
-                audio_clip = AudioFileClip(local_audio_path)
-                scene_duration = audio_clip.duration
-                if scene_duration <= 0:
-                     print(f"  Warning: Audio duration is zero or negative for scene {scene_num}. Skipping scene.")
-                     log.append(f"  Warning: Audio duration is zero or negative for scene {scene_num}. Skipping scene.")
-                     audio_clip.close()
-                     continue
-                print(f"  Audio Duration: {scene_duration:.2f} seconds")
-                log.append(f"  Audio Duration: {scene_duration:.2f} seconds")
-
-                img_clip = ImageClip(local_image_path).set_duration(scene_duration)
-                video_clip = img_clip.set_audio(audio_clip)
-                scene_clips.append(video_clip)
-                print(f"  Successfully created video clip for scene {scene_num}.")
-                log.append(f"  Successfully created video clip for scene {scene_num}.")
+                final_clip = concatenate_videoclips(scene_clips, method="compose")
+                print("Generating video data in memory...")
+                log.append("Generating video data in memory...")
+              
+                # Create video data in memory instead of saving to file
+                from io import BytesIO
+                video_buffer = BytesIO()
+                
+                final_clip.write_videofile(
+                    video_buffer,
+                    codec='libx264',
+                    fps=24,
+                    threads=4,
+                    logger=None
+                )
+                
+                video_data = video_buffer.getvalue()
+                print("Final video generated successfully in memory!")
+                log.append("Final video generated successfully in memory!")
+                final_clip.close()
+                
+                # Close all scene clips
+                for clip in scene_clips:
+                    if hasattr(clip, 'close'):
+                        clip.close()
+                
+                return video_data
 
             except Exception as e:
-                print(f"  Error processing scene {scene_num}: {e}")
-                log.append(f"  Error processing scene {scene_num}: {e}")
-                # Close clips if there was an error
-                if 'audio_clip' in locals():
-                    audio_clip.close()
+                print(f"Error during concatenation or generating final video: {e}")
+                log.append(f"Error during concatenation or generating final video: {e}")
+                # Close the final clip if it was created
+                if 'final_clip' in locals() and hasattr(final_clip, 'close'):
+                    final_clip.close()
+        else:
+            print("No valid scene clips were created. Final video cannot be generated.")
+            log.append("No valid scene clips were created. Final video cannot be generated.")
+        
+        # Cleanup
+        print("Cleaning up...")
+        log.append("Cleaning up...")
+        for clip in scene_clips:
+             if hasattr(clip, 'close'):
+                 clip.close()
 
-    if scene_clips:
-        print(f"\nConcatenating {len(scene_clips)} scene clips...")
-        log.append(f"Concatenating {len(scene_clips)} scene clips...")
-        try:
-            final_clip = concatenate_videoclips(scene_clips, method="compose")
-            print("Generating video data in memory...")
-            log.append("Generating video data in memory...")
-          
-            # Create video data in memory instead of saving to file
-            from io import BytesIO
-            video_buffer = BytesIO()
-            
-            final_clip.write_videofile(
-                video_buffer,
-                codec='libx264',
-                fps=24,
-                threads=4,
-                logger=None
-            )
-            
-            video_data = video_buffer.getvalue()
-            print("Final video generated successfully in memory!")
-            log.append("Final video generated successfully in memory!")
-            final_clip.close()
-            
-            # Close all scene clips
-            for clip in scene_clips:
-                if hasattr(clip, 'close'):
-                    clip.close()
-            
-            return video_data
-
-        except Exception as e:
-            print(f"Error during concatenation or generating final video: {e}")
-            log.append(f"Error during concatenation or generating final video: {e}")
-            # Close the final clip if it was created
-            if 'final_clip' in locals() and hasattr(final_clip, 'close'):
-                final_clip.close()
-    else:
-        print("No valid scene clips were created. Final video cannot be generated.")
-        log.append("No valid scene clips were created. Final video cannot be generated.")
-    
-    # Cleanup
-    print("Cleaning up...")
-    log.append("Cleaning up...")
-    for clip in scene_clips:
-         if hasattr(clip, 'close'):
-             clip.close()
-
-    return b""
+        return None
+    except Exception as e:
+        print(f"Unexpected error in create_final_video: {e}")
+        return None
 
 async def process_story(story_text: str, image_model: str = "gemini", 
                        api_key: Optional[str] = None, 
@@ -393,102 +397,114 @@ async def process_story(story_text: str, image_model: str = "gemini",
     """
     Process a story through all steps and return the results.
     """
-    # Initialize models with provided API configuration
-    initialize_models(api_key, api_url, api_model)
-    
-    # Initialize state
-    initial_state = {
-        "story_text": story_text,
-        "characters": {},
-        "scenes": [],
-        "overall_style": None,
-        "processing_log": []
-    }
-    
-    log = initial_state["processing_log"]
-    log.append("Starting story processing...")
-    
-    # Analyze story into scenes
-    scenes = analyze_story_scenes(story_text)
-    initial_state["scenes"] = scenes
-    log.append(f"Analyzed story into {len(scenes)} scenes")
-    
-    # Generate images and audio for each scene
-    output_dir = settings.IMAGE_OUTPUT_DIR
-    os.makedirs(output_dir, exist_ok=True)
-    
-    audio_output_dir = settings.AUDIO_OUTPUT_DIR
-    os.makedirs(audio_output_dir, exist_ok=True)
-    
-    updated_scenes = []
-    
-    for scene in scenes:
-        scene_num = scene.get('scene_number', 'N/A')
-        scene_text = scene.get('scene_text', '')
-        setting = scene.get('setting', 'Unknown location')
-        image_prompt = scene.get('image_prompt', f"{setting} illustration")
+    try:
+        # Initialize models with provided API configuration
+        initialize_models(api_key, api_url, api_model)
         
-        # Generate image - try GenAI first, fallback to mock
-        image_filename = f"scene_{scene_num}_image.png"
-        image_path = os.path.join(output_dir, image_filename)
-        
-        image_generated = False
-        if genai_client:
-            model_name = api_model or settings.IMAGE_API_MODEL or "gemini-2.0-flash-exp-image-generation"
-            image_generated = generate_image_with_genai(image_prompt, image_path, model_name)
-            if image_generated:
-                log.append(f"Generated image using GenAI for scene {scene_num}")
-            else:
-                log.append(f"Failed to generate image with GenAI for scene {scene_num}, using mock")
-        
-        # If GenAI failed or not available, use mock
-        if not image_generated:
-            image_generated = generate_mock_image(setting, scene_num, image_path)
-        
-        if image_generated:
-            scene['image_url'] = f"/output/images/{image_filename}"
-        else:
-            scene['image_url'] = None
-            log.append(f"Failed to generate image for scene {scene_num}")
-        
-        # Generate audio - try FastRTC first, fallback to mock
-        audio_filename = f"scene_{scene_num}_audio.wav"
-        audio_path = os.path.join(audio_output_dir, audio_filename)
-        
-        audio_generated = False
-        if tts_model:
-            audio_generated = generate_audio_with_fastrtc(scene_text, audio_path)
-            if audio_generated:
-                log.append(f"Generated audio using FastRTC for scene {scene_num}")
-            else:
-                log.append(f"Failed to generate audio with FastRTC for scene {scene_num}, using mock")
-        
-        # If FastRTC failed or not available, use mock
-        if not audio_generated:
-            audio_generated = generate_mock_audio(scene_text, audio_path)
-        
-        if audio_generated:
-            scene['audio_url'] = f"/output/audio/{audio_filename}"
-        else:
-            scene['audio_url'] = None
-            log.append(f"Failed to generate audio for scene {scene_num}")
-        
-        updated_scenes.append(scene)
-    
-    initial_state["scenes"] = updated_scenes
-    
-    # Create final video in memory
-    video_data = create_final_video(initial_state)
-    if video_data:
-        # Store video data with a unique ID and timestamp
-        video_id = str(uuid.uuid4())
-        video_storage[video_id] = {
-            'data': video_data,
-            'timestamp': datetime.now()
+        # Initialize state
+        initial_state = {
+            "story_text": story_text,
+            "characters": {},
+            "scenes": [],
+            "overall_style": None,
+            "processing_log": []
         }
-        initial_state["video_id"] = video_id
-        # Remove video_url since we're not saving to file anymore
-        if "video_url" in initial_state:
-            del initial_state["video_url"]
-    
-    return initial_state
+        
+        log = initial_state["processing_log"]
+        log.append("Starting story processing...")
+        
+        # Analyze story into scenes
+        scenes = analyze_story_scenes(story_text)
+        initial_state["scenes"] = scenes
+        log.append(f"Analyzed story into {len(scenes)} scenes")
+        
+        # Generate images and audio for each scene
+        output_dir = settings.IMAGE_OUTPUT_DIR
+        os.makedirs(output_dir, exist_ok=True)
+        
+        audio_output_dir = settings.AUDIO_OUTPUT_DIR
+        os.makedirs(audio_output_dir, exist_ok=True)
+        
+        updated_scenes = []
+        
+        for scene in scenes:
+            scene_num = scene.get('scene_number', 'N/A')
+            scene_text = scene.get('scene_text', '')
+            setting = scene.get('setting', 'Unknown location')
+            image_prompt = scene.get('image_prompt', f"{setting} illustration")
+            
+            # Generate image - try GenAI first, fallback to mock
+            image_filename = f"scene_{scene_num}_image.png"
+            image_path = os.path.join(output_dir, image_filename)
+            
+            image_generated = False
+            if genai_client:
+                model_name = api_model or settings.IMAGE_API_MODEL or "gemini-2.0-flash-exp-image-generation"
+                image_generated = generate_image_with_genai(image_prompt, image_path, model_name)
+                if image_generated:
+                    log.append(f"Generated image using GenAI for scene {scene_num}")
+                else:
+                    log.append(f"Failed to generate image with GenAI for scene {scene_num}, using mock")
+            
+            # If GenAI failed or not available, use mock
+            if not image_generated:
+                image_generated = generate_mock_image(setting, scene_num, image_path)
+            
+            if image_generated:
+                scene['image_url'] = f"/output/images/{image_filename}"
+            else:
+                scene['image_url'] = None
+                log.append(f"Failed to generate image for scene {scene_num}")
+            
+            # Generate audio - try FastRTC first, fallback to mock
+            audio_filename = f"scene_{scene_num}_audio.wav"
+            audio_path = os.path.join(audio_output_dir, audio_filename)
+            
+            audio_generated = False
+            if tts_model:
+                audio_generated = generate_audio_with_fastrtc(scene_text, audio_path)
+                if audio_generated:
+                    log.append(f"Generated audio using FastRTC for scene {scene_num}")
+                else:
+                    log.append(f"Failed to generate audio with FastRTC for scene {scene_num}, using mock")
+            
+            # If FastRTC failed or not available, use mock
+            if not audio_generated:
+                audio_generated = generate_mock_audio(scene_text, audio_path)
+            
+            if audio_generated:
+                scene['audio_url'] = f"/output/audio/{audio_filename}"
+            else:
+                scene['audio_url'] = None
+                log.append(f"Failed to generate audio for scene {scene_num}")
+            
+            updated_scenes.append(scene)
+        
+        initial_state["scenes"] = updated_scenes
+        
+        # Create final video in memory
+        video_data = create_final_video(initial_state)
+        if video_data:
+            # Store video data with a unique ID and timestamp
+            video_id = str(uuid.uuid4())
+            video_storage[video_id] = {
+                'data': video_data,
+                'timestamp': datetime.now()
+            }
+            initial_state["video_id"] = video_id
+            # Remove video_url since we're not saving to file anymore
+            if "video_url" in initial_state:
+                del initial_state["video_url"]
+        
+        return initial_state
+    except Exception as e:
+        # Log the error and return a state with the error
+        error_state = {
+            "story_text": story_text,
+            "characters": {},
+            "scenes": [],
+            "overall_style": None,
+            "processing_log": [f"Error processing story: {str(e)}"]
+        }
+        print(f"Error in process_story: {e}")
+        return error_state

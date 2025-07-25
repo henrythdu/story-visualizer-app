@@ -10,6 +10,7 @@ from typing import Optional
 import uuid
 import asyncio
 from datetime import datetime, timedelta
+import traceback
 
 from services.story_processor import process_story, video_storage, cleanup_old_videos
 from models.story import StoryAnalysisState
@@ -58,31 +59,48 @@ async def process_story_api(
     Process a story and generate visualization
     """
     try:
+        print(f"Processing story with image_model: {image_model}")
+        if api_key:
+            print("API key provided")
         # Process the story with API configuration
         result = await process_story(story_text, image_model, api_key, api_url, api_model)
+        print("Story processing completed")
         return JSONResponse(content=result)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        error_details = {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+        print(f"Error processing story: {error_details}")
+        raise HTTPException(status_code=500, detail=error_details)
 
 @app.get("/api/video/{video_id}")
 async def stream_video(video_id: str):
     """
     Stream a generated video by ID
     """
-    if video_id in video_storage:
-        video_info = video_storage[video_id]
-        return Response(content=video_info['data'], media_type="video/mp4")
-    else:
-        raise HTTPException(status_code=404, detail="Video not found")
+    try:
+        if video_id in video_storage:
+            video_info = video_storage[video_id]
+            return Response(content=video_info['data'], media_type="video/mp4")
+        else:
+            raise HTTPException(status_code=404, detail="Video not found")
+    except Exception as e:
+        print(f"Error streaming video: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Serve generated files
 @app.get("/output/{file_type}/{file_name}")
 async def serve_generated_file(file_type: str, file_name: str):
     """Serve generated images, audio, or video files"""
-    file_path = f"./output/{file_type}/{file_name}"
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    return {"error": "File not found"}
+    try:
+        file_path = f"./output/{file_type}/{file_name}"
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
+        return {"error": "File not found"}
+    except Exception as e:
+        print(f"Error serving file: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
