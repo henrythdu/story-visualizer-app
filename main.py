@@ -5,17 +5,10 @@ from fastapi.templating import Jinja2Templates
 import asyncio
 from datetime import datetime, timedelta
 import uuid
+from contextlib import asynccontextmanager
 
 # Import the video creation function
 from services.create_video import create_video
-
-app = FastAPI(title="Story Visualizer Web")
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Templates
-templates = Jinja2Templates(directory="templates")
 
 # In-memory storage for video data
 video_storage = {}
@@ -39,8 +32,6 @@ async def cleanup_videos():
         await asyncio.sleep(600)  # Run every 10 minutes
 
 # Start background task using lifespan
-from contextlib import asynccontextmanager
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Start the cleanup task
@@ -49,6 +40,7 @@ async def lifespan(app: FastAPI):
     # Clean up tasks on shutdown
     cleanup_task.cancel()
 
+# Create FastAPI app with lifespan
 app = FastAPI(title="Story Visualizer Web", lifespan=lifespan)
 
 # Mount static files
