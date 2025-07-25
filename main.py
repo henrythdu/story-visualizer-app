@@ -44,10 +44,6 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app with lifespan
 app = FastAPI(title="Story Visualizer Web", lifespan=lifespan)
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -102,3 +98,7 @@ async def stream_video(video_id: str):
         )
     else:
         raise HTTPException(status_code=404, detail="Video not found")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
