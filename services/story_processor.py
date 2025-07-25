@@ -41,16 +41,20 @@ def cleanup_old_videos():
     if expired_keys:
         print(f"Cleaned up {len(expired_keys)} old videos from storage")
 
-def generate_mock_image(scene_num: int, output_path: str):
+def generate_mock_image(scene_description: str, scene_num: int, output_path: str):
     """
-    Generate a mock image for testing when no API key is available
+    Generate a mock image based on scene description for testing when no API key is available
     """
     try:
-        # Create a simple colored image with text
+        # Create a simple colored image with text based on scene description
         image = Image.new('RGB', (640, 480), color='lightblue')
         draw = ImageDraw.Draw(image)
-        draw.text((10, 10), f"Scene {scene_num} Visualization", fill='black')
-        draw.text((10, 30), "Mock Image Generated", fill='black')
+        draw.text((10, 10), f"Scene {scene_num}", fill='black')
+        # Truncate description to fit in image
+        desc_lines = [scene_description[i:i+50] for i in range(0, min(len(scene_description), 150), 50)]
+        for i, line in enumerate(desc_lines):
+            draw.text((10, 30 + i*20), line, fill='black')
+        draw.text((10, 120), "Mock Visualization", fill='black')
         image.save(output_path)
         return True
     except Exception as e:
@@ -63,14 +67,15 @@ def generate_mock_audio(scene_text: str, output_path: str):
     """
     try:
         # Create a simple tone based on text length
-        sample_rate = 44100
-        # Duration based on text length (1 second per 100 characters, min 0.5s, max 5s)
-        duration = min(5.0, max(0.5, len(scene_text) / 100.0))
+        sample_rate = 22050  # Lower sample rate to reduce file size
+        # Duration based on text length (0.5 seconds per 50 characters, min 1s, max 10s)
+        duration = min(10.0, max(1.0, len(scene_text) / 50.0))
         frequency = 440.0  # A4 note
 
         # Generate the audio samples
         t = np.linspace(0, duration, int(sample_rate * duration), False)
-        audio_data = np.sin(2 * np.pi * frequency * t)
+        # Add some variation to make it more interesting
+        audio_data = np.sin(2 * np.pi * frequency * t) * np.exp(-t/2)
 
         # Write the WAV file
         write(output_path, sample_rate, audio_data.astype(np.float32))
@@ -78,6 +83,63 @@ def generate_mock_audio(scene_text: str, output_path: str):
     except Exception as e:
         print(f"Error generating mock audio: {e}")
         return False
+
+def analyze_story_scenes(story_text: str) -> List[Dict]:
+    """
+    Simple scene analysis based on paragraph breaks and keywords
+    """
+    # Split story into paragraphs (scenes)
+    paragraphs = [p.strip() for p in story_text.split('\n\n') if p.strip()]
+    
+    scenes = []
+    for i, paragraph in enumerate(paragraphs[:5]):  # Limit to 5 scenes for demo
+        # Simple setting detection based on keywords
+        setting_keywords = {
+            'forest': 'Enchanted Forest',
+            'castle': 'Ancient Castle',
+            'ocean': 'Open Ocean',
+            'city': 'Bustling City',
+            'mountain': 'Snowy Mountains',
+            'desert': 'Sandy Desert',
+            'space': 'Outer Space',
+            'underwater': 'Underwater Kingdom'
+        }
+        
+        setting = "Generic Location"
+        for keyword, location in setting_keywords.items():
+            if keyword in paragraph.lower():
+                setting = location
+                break
+        
+        # Simple tone detection
+        tone_keywords = {
+            'dark': 'Mysterious',
+            'scary': 'Frightening',
+            'happy': 'Joyful',
+            'sad': 'Melancholy',
+            'exciting': 'Thrilling',
+            'calm': 'Peaceful'
+        }
+        
+        tone = "Neutral"
+        for keyword, mood in tone_keywords.items():
+            if keyword in paragraph.lower():
+                tone = mood
+                break
+        
+        scene = {
+            "scene_number": i + 1,
+            "scene_text": paragraph,
+            "summary": paragraph[:50] + "..." if len(paragraph) > 50 else paragraph,
+            "setting": setting,
+            "characters_present": [],  # Would be populated with character detection
+            "tone": tone,
+            "image_url": None,
+            "audio_url": None
+        }
+        scenes.append(scene)
+    
+    return scenes
 
 def create_final_video(state: StoryAnalysisState) -> bytes:
     """
@@ -209,53 +271,48 @@ async def process_story(story_text: str, image_model: str = "gemini",
     """
     Process a story through all steps and return the results.
     """
-    # Initialize state with mock data for testing
+    # Initialize state
     initial_state = {
         "story_text": story_text,
         "characters": {},
-        "scenes": [
-            {
-                "scene_number": 1,
-                "scene_text": "Once upon a time...",
-                "summary": "Beginning of the story",
-                "setting": "A magical forest",
-                "characters_present": [],
-                "tone": "mysterious",
-                "image_url": None,
-                "audio_url": None
-            }
-        ],
+        "scenes": [],
         "overall_style": None,
         "processing_log": []
     }
     
     log = initial_state["processing_log"]
+    log.append("Starting story processing...")
     
-    # Generate mock images and audio for testing
+    # Analyze story into scenes
+    scenes = analyze_story_scenes(story_text)
+    initial_state["scenes"] = scenes
+    log.append(f"Analyzed story into {len(scenes)} scenes")
+    
+    # Generate images and audio for each scene
     output_dir = settings.IMAGE_OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
     
     audio_output_dir = settings.AUDIO_OUTPUT_DIR
     os.makedirs(audio_output_dir, exist_ok=True)
     
-    scenes = initial_state["scenes"]
     updated_scenes = []
     
     for scene in scenes:
         scene_num = scene.get('scene_number', 'N/A')
         scene_text = scene.get('scene_text', '')
+        setting = scene.get('setting', 'Unknown location')
         
-        # Generate mock image
+        # Generate mock image based on scene setting
         image_filename = f"scene_{scene_num}_image.png"
         image_path = os.path.join(output_dir, image_filename)
-        if generate_mock_image(scene_num, image_path):
+        if generate_mock_image(setting, scene_num, image_path):
             scene['image_url'] = f"/output/images/{image_filename}"
-            log.append(f"Generated mock image for scene {scene_num}")
+            log.append(f"Generated mock image for scene {scene_num} with setting: {setting}")
         else:
             scene['image_url'] = None
             log.append(f"Failed to generate mock image for scene {scene_num}")
         
-        # Generate mock audio
+        # Generate mock audio based on scene text
         audio_filename = f"scene_{scene_num}_audio.wav"
         audio_path = os.path.join(audio_output_dir, audio_filename)
         if generate_mock_audio(scene_text, audio_path):
