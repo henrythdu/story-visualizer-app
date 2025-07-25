@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import uuid
 
 # Import the video creation function
-from services.create_video import create_video_from_story
+from services.create_video import create_video
 
 app = FastAPI(title="Story Visualizer Web")
 
@@ -38,9 +38,24 @@ async def cleanup_videos():
         
         await asyncio.sleep(600)  # Run every 10 minutes
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(cleanup_videos())
+# Start background task using lifespan
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start the cleanup task
+    cleanup_task = asyncio.create_task(cleanup_videos())
+    yield
+    # Clean up tasks on shutdown
+    cleanup_task.cancel()
+
+app = FastAPI(title="Story Visualizer Web", lifespan=lifespan)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Templates
+templates = Jinja2Templates(directory="templates")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -50,7 +65,7 @@ async def read_root(request: Request):
 async def process_story(story_text: str = Form(...)):
     try:
         # Create video from story using your function
-        video_clip = create_video_from_story(story_text)
+        video_clip = create_video(story_text)
         
         # Generate video data in memory
         from io import BytesIO
