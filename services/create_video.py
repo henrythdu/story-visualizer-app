@@ -7,8 +7,8 @@ from PIL import Image
 import numpy as np
 from io import BytesIO
 
-def create_video(story_text, process_id=None):
-    final_state = create_finalstate(story_text, process_id)
+def create_video(story_text, process_id=None, log_storage=None):
+    final_state = create_finalstate(story_text, process_id, log_storage)
     # -----------------------------------------------------
 
     scene_clips = [] # To store video clips for each scene

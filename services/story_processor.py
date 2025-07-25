@@ -35,12 +35,6 @@ except ImportError:
 from models.story import StoryAnalysisState
 from config.settings import Settings
 
-# Import log storage from main
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from main import log_storage
-
 settings = Settings()
 
 # In-memory storage for video data (in a production app, you might use Redis or similar)
@@ -54,6 +48,12 @@ tts_model = None
 
 # Process ID for logging
 current_process_id = None
+log_storage = None  # Will be set by set_log_storage function
+
+def set_log_storage(storage):
+    """Set the log storage reference"""
+    global log_storage
+    log_storage = storage
 
 def set_process_id(process_id):
     """Set the current process ID for logging"""
@@ -62,7 +62,7 @@ def set_process_id(process_id):
 
 def log_message(message):
     """Log a message to the current process log"""
-    if current_process_id and current_process_id in log_storage:
+    if current_process_id and log_storage and current_process_id in log_storage:
         log_storage[current_process_id].append(message)
         print(message)  # Also print to console for debugging
     else:

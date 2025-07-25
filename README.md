@@ -10,6 +10,7 @@ A web application that transforms short stories into audio-visual experiences us
 - Audio narration using FastRTC TTS
 - Final video composition combining images and audio with MoviePy
 - Dark mode UI with responsive design
+- Real-time processing logs
 
 ## Prerequisites
 
@@ -55,13 +56,23 @@ A web application that transforms short stories into audio-visual experiences us
 
 4. Click "Visualize Story" to generate the visualization
 
-5. Once processing is complete, view and download your generated video
+5. Watch the real-time processing logs in the sidebar
+
+6. Once processing is complete, view and download your generated video
+
+## Demo
+
+Check out our demo video to see the Story Visualizer in action:
+
+![Demo Video](assets/Demo_visualizer)
 
 ## API Endpoints
 
 - `GET /` - Serve the main web interface
 - `POST /api/process` - Process a story and generate visualization
 - `GET /api/video/{video_id}` - Stream the generated video
+- `GET /api/video/by_process/{process_id}` - Check if video processing is complete
+- `GET /api/logs/{process_id}` - Stream processing logs
 
 ## Technologies Used
 
@@ -88,8 +99,10 @@ story-visualizer-web/
 │   ├── create_video.py        # Video creation with MoviePy
 │   └── story_processor.py     # Story processing logic
 ├── static/                 # Static files (CSS, JS, images)
-└── templates/              # HTML templates
-    └── index.html          # Main HTML template
+├── templates/              # HTML templates
+│   └── index.html          # Main HTML template
+└── assets/                 # Demo and documentation assets
+    └── Demo_visualizer     # Demo video
 ```
 
 ## How It Works

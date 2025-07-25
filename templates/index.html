@@ -199,6 +199,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let eventSource = null;
+        let processId = null;
+        let pollInterval = null;
         
         document.getElementById('storyForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -240,17 +242,17 @@
                 }
                 
                 const result = await response.json();
+                processId = result.process_id;
                 
-                // Start streaming logs
-                startLogStreaming(result.process_id);
+                // Start streaming logs immediately
+                startLogStreaming(processId);
                 
-                // Display the video when it's ready
-                displayVideo(result.video_id);
+                // Start polling for video completion
+                startVideoPolling(processId);
             } catch (error) {
                 console.error('Error:', error);
                 showError('Error processing story: ' + error.message);
-            } finally {
-                // Hide processing spinner and enable button
+                // Hide processing spinner and enable button on error
                 processingSpinner.style.display = 'none';
                 processBtn.disabled = false;
                 processBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Visualize Story';
@@ -284,6 +286,40 @@
                 console.error('Log streaming error:', event);
                 // Don't close the connection on error, as it might be temporary
             };
+        }
+        
+        function startVideoPolling(processId) {
+            // Clear any existing polling interval
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+            
+            // Start polling for video completion
+            pollInterval = setInterval(async function() {
+                try {
+                    const response = await fetch(`/api/video/by_process/${processId}`);
+                    if (response.ok) {
+                        const result = await response.json();
+                        if (result.video_id) {
+                            // Video is ready, stop polling
+                            clearInterval(pollInterval);
+                            pollInterval = null;
+                            
+                            // Display the video
+                            displayVideo(result.video_id);
+                            
+                            // Hide processing spinner and enable button
+                            const processingSpinner = document.getElementById('processingSpinner');
+                            const processBtn = document.getElementById('processBtn');
+                            processingSpinner.style.display = 'none';
+                            processBtn.disabled = false;
+                            processBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Visualize Story';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Polling error:', error);
+                }
+            }, 2000); // Poll every 2 seconds
         }
         
         function displayVideo(videoId) {
@@ -327,6 +363,12 @@
             if (eventSource) {
                 eventSource.close();
                 eventSource = null;
+            }
+            
+            // Stop polling
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
             }
             
             // Clear logs

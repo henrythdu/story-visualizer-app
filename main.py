@@ -63,16 +63,25 @@ async def read_root(request: Request):
 
 @app.post("/api/process")
 async def process_story(story_text: str = Form(...)):
+    # Generate a unique ID for this processing session
+    process_id = str(uuid.uuid4())
+    
+    # Initialize log storage for this process
+    log_storage[process_id] = []
+    
+    # Return the process ID immediately so frontend can start streaming logs
+    # Process the video in background
+    asyncio.create_task(process_video_async(story_text, process_id))
+    
+    return {"process_id": process_id}
+
+async def process_video_async(story_text: str, process_id: str):
+    # Small delay to ensure streaming connection is established
+    await asyncio.sleep(0.5)
+    
     try:
-        # Generate a unique ID for this processing session
-        process_id = str(uuid.uuid4())
-        
-        # Initialize log storage for this process
-        log_storage[process_id] = []
-        
         # Create video from story using your function
-        # We'll need to modify this to capture logs
-        video_clip = create_video(story_text, process_id)
+        video_clip = create_video(story_text, process_id, log_storage)
         
         # Generate video data in memory using a temporary approach
         import tempfile
@@ -105,18 +114,25 @@ async def process_story(story_text: str = Form(...)):
         video_id = str(uuid.uuid4())
         video_storage[video_id] = {
             'data': video_data,
-            'timestamp': datetime.now()
+            'timestamp': datetime.now(),
+            'process_id': process_id  # Link video to process
         }
+        
+        # Add a completion message to logs
+        if process_id in log_storage:
+            log_storage[process_id].append("Video processing completed successfully!")
+            log_storage[process_id].append(f"Video ID: {video_id}")
         
         # Clean up the clip
         video_clip.close()
         
-        return {"video_id": video_id, "process_id": process_id}
     except Exception as e:
-        print(f"Error in process_story: {e}")
+        print(f"Error in process_video_async: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        # Add error message to logs
+        if process_id in log_storage:
+            log_storage[process_id].append(f"Error during processing: {str(e)}")
 
 @app.get("/api/video/{video_id}")
 async def stream_video(video_id: str):
@@ -133,10 +149,28 @@ async def stream_video(video_id: str):
     else:
         raise HTTPException(status_code=404, detail="Video not found")
 
+@app.get("/api/video/by_process/{process_id}")
+async def get_video_by_process(process_id: str):
+    # Look for a video associated with this process ID
+    for video_id, video_info in video_storage.items():
+        if video_info.get('process_id') == process_id:
+            return {"video_id": video_id}
+    
+    # If no video found, return 404
+    raise HTTPException(status_code=404, detail="Video not ready or not found")
+
 @app.get("/api/logs/{process_id}")
 async def stream_logs(process_id: str):
     async def log_generator():
         sent_logs = 0
+        # Send all existing logs first
+        if process_id in log_storage:
+            logs = log_storage[process_id]
+            for i in range(len(logs)):
+                yield f"data: {json.dumps({'message': logs[i]})}\n\n"
+            sent_logs = len(logs)
+        
+        # Then continue sending new logs as they appear
         while True:
             if process_id in log_storage:
                 logs = log_storage[process_id]
