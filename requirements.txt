@@ -4,6 +4,6 @@ python-multipart==0.0.6
 moviepy==1.0.3
 python-dotenv==1.0.0
 google-genai==0.1.0
-fastrtc==0.0.29
+fastrtc[vad,stt,tts]==0.0.29
 langgraph==0.3.21
 langchain-google-genai==2.1.2
