@@ -1,11 +1,12 @@
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import asyncio
 from datetime import datetime, timedelta
 import uuid
 from contextlib import asynccontextmanager
+import io
 
 # Import the video creation function
 from services.create_video import create_video
@@ -43,6 +44,10 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app with lifespan
 app = FastAPI(title="Story Visualizer Web", lifespan=lifespan)
 
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -60,8 +65,7 @@ async def process_story(story_text: str = Form(...)):
         video_clip = create_video(story_text)
         
         # Generate video data in memory
-        from io import BytesIO
-        video_buffer = BytesIO()
+        video_buffer = io.BytesIO()
         video_clip.write_videofile(
             video_buffer,
             codec='libx264',
@@ -89,6 +93,12 @@ async def process_story(story_text: str = Form(...)):
 async def stream_video(video_id: str):
     if video_id in video_storage:
         video_info = video_storage[video_id]
-        return Response(content=video_info['data'], media_type="video/mp4")
+        return Response(
+            content=video_info['data'], 
+            media_type="video/mp4",
+            headers={
+                "Content-Disposition": "inline; filename=story_visualization.mp4"
+            }
+        )
     else:
         raise HTTPException(status_code=404, detail="Video not found")

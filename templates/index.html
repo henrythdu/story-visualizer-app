@@ -86,6 +86,16 @@
             top: 1rem;
             right: 1rem;
         }
+        
+        .error-message {
+            color: #ff6b6b;
+            background-color: rgba(255, 107, 107, 0.1);
+            border: 1px solid #ff6b6b;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -129,6 +139,8 @@
                             </div>
                             <p class="mt-2 mb-0">Creating your visual story... This may take a minute.</p>
                         </div>
+                        
+                        <div class="error-message" id="errorMessage"></div>
                     </div>
                 </div>
                 
@@ -162,9 +174,13 @@
             const storyText = document.getElementById('storyText').value;
             const processBtn = document.getElementById('processBtn');
             const processingSpinner = document.getElementById('processingSpinner');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            // Hide any previous error message
+            errorMessage.style.display = 'none';
             
             if (!storyText.trim()) {
-                alert('Please enter a story');
+                showError('Please enter a story');
                 return;
             }
             
@@ -183,7 +199,8 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
                 }
                 
                 const result = await response.json();
@@ -192,7 +209,7 @@
                 displayVideo(result.video_id);
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error processing story: ' + error.message);
+                showError('Error processing story: ' + error.message);
             } finally {
                 // Hide processing spinner and enable button
                 processingSpinner.style.display = 'none';
@@ -224,6 +241,12 @@
                 link.click();
                 document.body.removeChild(link);
             };
+        }
+        
+        function showError(message) {
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
         }
         
         // New story button
