@@ -15,6 +15,26 @@ from scipy.io.wavfile import write
 # For video generation
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
 
+# Google GenAI for image generation
+try:
+    from google import genai
+    from google.genai import types
+    GOOGLE_GENAI_AVAILABLE = True
+except ImportError:
+    GOOGLE_GENAI_AVAILABLE = False
+    genai = None
+    types = None
+
+# TTS for audio generation
+try:
+    from TTS.api import TTS
+    import torch
+    TTS_AVAILABLE = True
+except ImportError:
+    TTS_AVAILABLE = False
+    TTS = None
+    torch = None
+
 from models.story import StoryAnalysisState
 from config.settings import Settings
 
@@ -23,6 +43,50 @@ settings = Settings()
 # In-memory storage for video data (in a production app, you might use Redis or similar)
 # Each entry contains: {'data': bytes, 'timestamp': datetime}
 video_storage = {}
+
+# Global variables for models
+llm = None
+genai_client = None
+tts_model = None
+
+def initialize_models(api_key: Optional[str] = None, api_url: Optional[str] = None, api_model: Optional[str] = None):
+    """
+    Initialize the models with provided API configuration
+    """
+    global llm, genai_client, tts_model
+    
+    # Use provided API key or fallback to settings
+    google_api_key = api_key or settings.GOOGLE_API_KEY or settings.IMAGE_API_KEY
+    image_model = api_model or settings.IMAGE_API_MODEL or "gemini-2.0-flash-exp-image-generation"
+    
+    # Initialize Google GenAI for image generation
+    if google_api_key and GOOGLE_GENAI_AVAILABLE:
+        try:
+            os.environ["GOOGLE_API_KEY"] = google_api_key
+            genai_client = genai.Client()
+            print(f"Google GenAI Image Generation client initialized with model: {image_model}")
+        except Exception as e:
+            print(f"Error initializing Google GenAI Image Generation client: {e}")
+            genai_client = None
+    else:
+        genai_client = None
+        if not google_api_key:
+            print("⚠️ Google API key not provided. Using mock image generation.")
+        if not GOOGLE_GENAI_AVAILABLE:
+            print("⚠️ Google GenAI library not available. Using mock image generation.")
+    
+    # Initialize TTS model
+    if TTS_AVAILABLE:
+        try:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            tts_model = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC_ph", progress_bar=False).to(device)
+            print("TTS model initialized")
+        except Exception as e:
+            print(f"Error initializing TTS model: {e}")
+            tts_model = None
+    else:
+        tts_model = None
+        print("⚠️ TTS library not available. Using mock audio generation.")
 
 def cleanup_old_videos():
     """
@@ -41,6 +105,45 @@ def cleanup_old_videos():
     if expired_keys:
         print(f"Cleaned up {len(expired_keys)} old videos from storage")
 
+def generate_image_with_genai(prompt: str, output_path: str, model_name: str = "gemini-2.0-flash-exp-image-generation") -> bool:
+    """
+    Generate an image using Google GenAI API
+    """
+    if not genai_client:
+        return False
+    
+    try:
+        # Call the Google GenAI API for image generation
+        response = genai_client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=['Text', 'Image'],
+            )
+        )
+        time.sleep(1)  # Rate limiting
+        
+        # Process the response to find and save the image
+        if response.candidates and hasattr(response.candidates[0], 'content') and hasattr(response.candidates[0].content, 'parts'):
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'inline_data') and hasattr(part.inline_data, 'data'):
+                    print("Image data received from GenAI API.")
+                    image_data = part.inline_data.data
+                    try:
+                        image = Image.open(io.BytesIO(image_data))
+                        image.save(output_path)
+                        print(f"Saved image to: {output_path}")
+                        return True
+                    except Exception as img_err:
+                        print(f"Error processing/saving image data: {img_err}")
+                        return False
+        
+        print("No valid image data found in API response.")
+        return False
+    except Exception as e:
+        print(f"Error during image generation API call: {e}")
+        return False
+
 def generate_mock_image(scene_description: str, scene_num: int, output_path: str):
     """
     Generate a mock image based on scene description for testing when no API key is available
@@ -54,11 +157,29 @@ def generate_mock_image(scene_description: str, scene_num: int, output_path: str
         desc_lines = [scene_description[i:i+50] for i in range(0, min(len(scene_description), 150), 50)]
         for i, line in enumerate(desc_lines):
             draw.text((10, 30 + i*20), line, fill='black')
-        draw.text((10, 120), "Mock Visualization", fill='black')
+        draw.text((10, 120), "Generated Visualization", fill='black')
         image.save(output_path)
         return True
     except Exception as e:
         print(f"Error generating mock image for scene {scene_num}: {e}")
+        return False
+
+def generate_audio_with_tts(text: str, output_path: str) -> bool:
+    """
+    Generate audio using TTS model
+    """
+    if not tts_model:
+        return False
+    
+    try:
+        tts_model.tts_to_file(text=text, file_path=output_path)
+        if torch.cuda.is_available():
+            import gc
+            torch.cuda.empty_cache()
+            gc.collect()
+        return True
+    except Exception as e:
+        print(f"Error generating audio with TTS: {e}")
         return False
 
 def generate_mock_audio(scene_text: str, output_path: str):
@@ -127,6 +248,9 @@ def analyze_story_scenes(story_text: str) -> List[Dict]:
                 tone = mood
                 break
         
+        # Create image prompt based on scene details
+        image_prompt = f"{setting}, {tone.lower()} atmosphere, digital art"
+        
         scene = {
             "scene_number": i + 1,
             "scene_text": paragraph,
@@ -134,6 +258,7 @@ def analyze_story_scenes(story_text: str) -> List[Dict]:
             "setting": setting,
             "characters_present": [],  # Would be populated with character detection
             "tone": tone,
+            "image_prompt": image_prompt,
             "image_url": None,
             "audio_url": None
         }
@@ -271,6 +396,9 @@ async def process_story(story_text: str, image_model: str = "gemini",
     """
     Process a story through all steps and return the results.
     """
+    # Initialize models with provided API configuration
+    initialize_models(api_key, api_url, api_model)
+    
     # Initialize state
     initial_state = {
         "story_text": story_text,
@@ -301,26 +429,52 @@ async def process_story(story_text: str, image_model: str = "gemini",
         scene_num = scene.get('scene_number', 'N/A')
         scene_text = scene.get('scene_text', '')
         setting = scene.get('setting', 'Unknown location')
+        image_prompt = scene.get('image_prompt', f"{setting} illustration")
         
-        # Generate mock image based on scene setting
+        # Generate image - try GenAI first, fallback to mock
         image_filename = f"scene_{scene_num}_image.png"
         image_path = os.path.join(output_dir, image_filename)
-        if generate_mock_image(setting, scene_num, image_path):
+        
+        image_generated = False
+        if genai_client:
+            model_name = api_model or settings.IMAGE_API_MODEL or "gemini-2.0-flash-exp-image-generation"
+            image_generated = generate_image_with_genai(image_prompt, image_path, model_name)
+            if image_generated:
+                log.append(f"Generated image using GenAI for scene {scene_num}")
+            else:
+                log.append(f"Failed to generate image with GenAI for scene {scene_num}, using mock")
+        
+        # If GenAI failed or not available, use mock
+        if not image_generated:
+            image_generated = generate_mock_image(setting, scene_num, image_path)
+        
+        if image_generated:
             scene['image_url'] = f"/output/images/{image_filename}"
-            log.append(f"Generated mock image for scene {scene_num} with setting: {setting}")
         else:
             scene['image_url'] = None
-            log.append(f"Failed to generate mock image for scene {scene_num}")
+            log.append(f"Failed to generate image for scene {scene_num}")
         
-        # Generate mock audio based on scene text
+        # Generate audio - try TTS first, fallback to mock
         audio_filename = f"scene_{scene_num}_audio.wav"
         audio_path = os.path.join(audio_output_dir, audio_filename)
-        if generate_mock_audio(scene_text, audio_path):
+        
+        audio_generated = False
+        if tts_model:
+            audio_generated = generate_audio_with_tts(scene_text, audio_path)
+            if audio_generated:
+                log.append(f"Generated audio using TTS for scene {scene_num}")
+            else:
+                log.append(f"Failed to generate audio with TTS for scene {scene_num}, using mock")
+        
+        # If TTS failed or not available, use mock
+        if not audio_generated:
+            audio_generated = generate_mock_audio(scene_text, audio_path)
+        
+        if audio_generated:
             scene['audio_url'] = f"/output/audio/{audio_filename}"
-            log.append(f"Generated mock audio for scene {scene_num}")
         else:
             scene['audio_url'] = None
-            log.append(f"Failed to generate mock audio for scene {scene_num}")
+            log.append(f"Failed to generate audio for scene {scene_num}")
         
         updated_scenes.append(scene)
     
