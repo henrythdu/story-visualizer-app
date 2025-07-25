@@ -64,9 +64,8 @@ A web application that transforms short stories into audio-visual experiences us
 
 Check out our demo video to see the Story Visualizer in action:
 
-[![Demo Video](assets/Demo_visualizer)](assets/Demo_visualizer)
+<video src="assets/Demo_visualizer)](assets/Demo_visualizer.mp4" width="300" />
 
-Or if you prefer, you can [watch the full demo video here](assets/Demo_visualizer).
 
 ## API Endpoints
 
