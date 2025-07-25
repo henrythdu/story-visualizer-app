@@ -9,6 +9,7 @@ class Settings:
         # API Keys
         self.GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+        self.OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
         self.STABILITY_API_KEY = os.getenv("STABILITY_API_KEY", "")
         
         # Model settings

@@ -9,8 +9,8 @@ class SceneInfo(TypedDict):
     characters_present: List[str]
     tone: str
     image_prompt: Optional[str]
-    image_url: Optional[str]
-    audio_url: Optional[str]
+    image_base64: Optional[str]
+    audio_array: Optional[str]
 
 class StoryAnalysisState(TypedDict):
     story_text: str
@@ -18,4 +18,3 @@ class StoryAnalysisState(TypedDict):
     scenes: List[SceneInfo]
     overall_style: Optional[str]
     processing_log: List[str]
-    video_id: Optional[str]
