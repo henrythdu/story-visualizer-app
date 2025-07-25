@@ -7,7 +7,7 @@ import time # Added for delays gemini-2.0-flash has rate limits of 10 per min
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI # For text generation
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langgraph.graph import StateGraph, END
 
 # Google genai

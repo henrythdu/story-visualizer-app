@@ -7,3 +7,7 @@ google-genai==0.1.0
 fastrtc[vad,stt,tts]==0.0.29
 langgraph==0.3.21
 langchain-google-genai==2.1.2
+langchain-core==0.3.21
+pillow==10.0.1
+numpy==1.25.2
+typing-extensions==4.8.0
