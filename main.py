@@ -6,8 +6,8 @@ import asyncio
 from datetime import datetime, timedelta
 import uuid
 
+# Import the video creation function
 from services.create_video import create_video_from_story
-from services.create_final_state import create_final_state
 
 app = FastAPI(title="Story Visualizer Web")
 
@@ -49,10 +49,7 @@ async def read_root(request: Request):
 @app.post("/api/process")
 async def process_story(story_text: str = Form(...)):
     try:
-        # Create the final state
-        state = create_final_state(story_text)
-        
-        # Create video from story
+        # Create video from story using your function
         video_clip = create_video_from_story(story_text)
         
         # Generate video data in memory
@@ -77,7 +74,7 @@ async def process_story(story_text: str = Form(...)):
         # Clean up the clip
         video_clip.close()
         
-        return {"video_id": video_id, "state": state}
+        return {"video_id": video_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
