@@ -222,14 +222,12 @@ def create_video(story_text, process_id=None, log_storage=None, api_key=None):
         sys.stdout.flush()
         sys.stderr.flush()
         # Yield control to allow event loop to process log streaming
-        await asyncio.sleep(0.01)
         try:
             print("Concatenating video clips...")
             # Force flush logs to ensure they're sent immediately
             sys.stdout.flush()
             sys.stderr.flush()
             # Yield control to allow event loop to process log streaming
-            await asyncio.sleep(0.01)
             final_clip = concatenate_videoclips(scene_clips, method="compose")
             # --- Cleanup: Close any remaining clips in the list ---
             print("Cleaning up...")
@@ -237,7 +235,6 @@ def create_video(story_text, process_id=None, log_storage=None, api_key=None):
             sys.stdout.flush()
             sys.stderr.flush()
             # Yield control to allow event loop to process log streaming
-            await asyncio.sleep(0.01)
             for clip in scene_clips:
                 if hasattr(clip, 'close'):
                     clip.close()
@@ -246,7 +243,6 @@ def create_video(story_text, process_id=None, log_storage=None, api_key=None):
             sys.stdout.flush()
             sys.stderr.flush()
             # Yield control to allow event loop to process log streaming
-            await asyncio.sleep(0.01)
             return final_clip
             
         except Exception as e:
