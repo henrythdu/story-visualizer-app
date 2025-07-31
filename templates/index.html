@@ -141,6 +141,13 @@
                                     placeholder="Paste your short story here..."></textarea>
                             </div>
                             
+                            <div class="mb-3">
+                                <label for="apiKey" class="form-label">Google API Key (Optional)</label>
+                                <input type="password" class="form-control" id="apiKey" name="api_key" 
+                                    placeholder="Enter your Google API key (if not using default)">
+                                <div class="form-text">You can use your own Google API key for image generation. If left blank, the default key will be used.</div>
+                            </div>
+                            
                             <div class="d-grid">
                                 <button type="submit" class="btn btn-primary" id="processBtn">
                                     <i class="bi bi-play-circle me-2"></i>Visualize Story
@@ -231,6 +238,14 @@
                 const formData = new FormData();
                 formData.append('story_text', storyText);
                 
+                // Get the API key from the form
+                const apiKey = document.getElementById('apiKey').value;
+                
+                // Add API key to form data if provided
+                if (apiKey) {
+                    formData.append('api_key', apiKey);
+                }
+                
                 const response = await fetch('/api/process', {
                     method: 'POST',
                     body: formData
@@ -265,13 +280,35 @@
                 eventSource.close();
             }
             
-            // Create new EventSource connection
-            eventSource = new EventSource(`/api/logs/${processId}`);
-            
             const logContent = document.getElementById('logContent');
             const logContainer = document.getElementById('logContainer');
             
+            // Show connecting message
+            const connectingEntry = document.createElement('div');
+            connectingEntry.textContent = 'Connecting to log stream...';
+            connectingEntry.className = 'log-entry';
+            logContent.appendChild(connectingEntry);
+            
+            // Create new EventSource connection
+            eventSource = new EventSource(`/api/logs/${processId}`);
+            
+            eventSource.onopen = function(event) {
+                console.log('Log streaming connection opened');
+                // Remove connecting message and show connected message
+                if (logContent.contains(connectingEntry)) {
+                    logContent.removeChild(connectingEntry);
+                }
+                const connectedEntry = document.createElement('div');
+                connectedEntry.textContent = '✓ Connected to log stream. Waiting for processing to start...';
+                connectedEntry.className = 'log-entry';
+                logContent.appendChild(connectedEntry);
+                
+                // Scroll to bottom
+                logContainer.scrollTop = logContainer.scrollHeight;
+            };
+            
             eventSource.onmessage = function(event) {
+                console.log('Received log message:', event.data);
                 const data = JSON.parse(event.data);
                 const logEntry = document.createElement('div');
                 logEntry.textContent = data.message;
@@ -284,6 +321,16 @@
             
             eventSource.onerror = function(event) {
                 console.error('Log streaming error:', event);
+                // Add error message to log
+                const errorEntry = document.createElement('div');
+                errorEntry.textContent = '⚠️ Log streaming error occurred. Check console for details.';
+                errorEntry.className = 'log-entry';
+                errorEntry.style.color = '#ff6b6b';
+                logContent.appendChild(errorEntry);
+                
+                // Scroll to bottom
+                logContainer.scrollTop = logContainer.scrollHeight;
+                
                 // Don't close the connection on error, as it might be temporary
             };
         }

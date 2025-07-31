@@ -12,3 +12,4 @@ pillow
 numpy
 typing-extensions
 langchain_community
+jinja2

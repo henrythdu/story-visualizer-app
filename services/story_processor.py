@@ -2,6 +2,7 @@ import operator
 import os
 from typing import Optional
 import time # Added for delays gemini-2.0-flash has rate limits of 10 per min
+import asyncio
 
 # Langchain/LangGraph specific imports
 from langchain_core.prompts import ChatPromptTemplate
@@ -64,9 +65,17 @@ def log_message(message):
     """Log a message to the current process log"""
     if current_process_id and log_storage and current_process_id in log_storage:
         log_storage[current_process_id].append(message)
-        print(message)  # Also print to console for debugging
+        print(f"[LOG] {message}")  # Also print to console for debugging
+        # Force flush to ensure immediate availability
+        import sys
+        sys.stdout.flush()
+        sys.stderr.flush()
     else:
-        print(message)  # Fallback to console printing
+        print(f"[LOG FALLBACK] {message}")  # Fallback to console printing
+        # Force flush to ensure immediate availability
+        import sys
+        sys.stdout.flush()
+        sys.stderr.flush()
 
 def initialize_models(api_key: Optional[str] = None):
     """
@@ -137,15 +146,23 @@ def read_story(state: StoryAnalysisState) -> StoryAnalysisState:
     log = state.get("processing_log", [])
     log.append("Reading story...")
     log_message("--- Reading Story ---")
+    # Force flush logs to ensure they're sent immediately
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
     return {"processing_log": log}
 
-def analyze_characters(state: StoryAnalysisState) -> StoryAnalysisState:
+async def analyze_characters(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     Node to identify characters and their initial descriptions using Gemini (via Langchain).
     """
     log = state.get("processing_log", [])
     log.append("Analyzing characters using Gemini...")
     log_message("--- Analyzing Characters (using Gemini) ---")
+    # Force flush logs to ensure they're sent immediately
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
     story = state["story_text"]
     characters_found = {}
 
@@ -168,7 +185,11 @@ Example JSON output format:
     chain = prompt_template | llm | parser
 
     try:
-        response = chain.invoke({"story_text": story})
+        response = await chain.ainvoke({"story_text": story})
+        # Force flush logs to ensure they're sent immediately
+        import sys
+        sys.stdout.flush()
+        sys.stderr.flush()
         characters_found = response
         # Ensure description is always a string (replace null with empty string if needed)
         for char, details in characters_found.items():
@@ -186,13 +207,17 @@ Example JSON output format:
     return {"characters": characters_found, "processing_log": log}
 
 
-def generate_missing_descriptions(state: StoryAnalysisState) -> StoryAnalysisState:
+async def generate_missing_descriptions(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     Node to generate descriptions for characters identified without one using Gemini (via Langchain).
     """
     log = state.get("processing_log", [])
     log.append("Checking for and generating missing descriptions using Gemini...")
     log_message("--- Generating Missing Descriptions (using Gemini) ---")
+    # Force flush logs to ensure they're sent immediately
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
     characters = state.get("characters", {})
     story = state["story_text"]
     updated_characters = characters.copy()
@@ -229,19 +254,30 @@ Output ONLY the generated description as a plain string."""),
 
     log_message(f"Attempting to generate descriptions for: {', '.join(characters_to_generate)}")
     for name in characters_to_generate:
-        time.sleep(8) #Gemini-2.0-flash has rate limit of 10 per minute
+        await asyncio.sleep(8) #Gemini-2.0-flash has rate limit of 10 per minute
+        # Force flush logs to ensure they're sent immediately
+        import sys
+        sys.stdout.flush()
+        sys.stderr.flush()
         try:
             # Invoke the chain
-            generated_desc = chain.invoke({
+            generated_desc = await chain.ainvoke({
                 "character_name": name,
                 "story_context": story # Provide the full story as context
             })
+            # Force flush logs to ensure they're sent immediately
+            import sys
+            sys.stdout.flush()
+            sys.stderr.flush()
             # Ensure the character exists in updated_characters before assigning
             if name not in updated_characters:
                  updated_characters[name] = {} # Initialize if somehow missing
             updated_characters[name]["description"] = generated_desc.strip()
             log.append(f"Successfully generated description for {name}.")
             log_message(f"Generated description for {name}: {generated_desc.strip()}")
+            # Force flush logs to ensure they're sent immediately
+            sys.stdout.flush()
+            sys.stderr.flush()
         except Exception as e:
             log.append(f"Error generating description for {name}: {e}")
             log_message(f"Error generating description for {name}: {e}")
@@ -253,13 +289,17 @@ Output ONLY the generated description as a plain string."""),
     return {"characters": updated_characters, "processing_log": log}
 
 
-def analyze_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
+async def analyze_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     Node to break the story into scenes and extract details for each using Gemini (via Langchain).
     """
     log = state.get("processing_log", [])
     log.append("Analyzing scenes using Gemini...")
     log_message("--- Analyzing Scenes (using Gemini) ---")
+    # Force flush logs to ensure they're sent immediately
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
     story = state["story_text"]
     character_names = list(state.get("characters", {}).keys())
     scenes_found = []
@@ -303,11 +343,15 @@ Example JSON output format:
     chain = prompt_template | llm | parser
 
     try:
-        response = chain.invoke({
+        response = await chain.ainvoke({
             "story_text": story,
             "character_list": character_names,
             "character_list_str": ", ".join(character_names)
         })
+        # Force flush logs to ensure they're sent immediately
+        import sys
+        sys.stdout.flush()
+        sys.stderr.flush()
         # Initialize added fields
         scenes_found = []
         for scene_data in response:
@@ -337,13 +381,17 @@ Example JSON output format:
     return {"scenes": scenes_found, "processing_log": log}
 
 
-def determine_overall_style(state: StoryAnalysisState) -> StoryAnalysisState:
+async def determine_overall_style(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     Node to determine an overall visual style based on the story text using Gemini for consistent style for image generation.
     """
     log = state.get("processing_log", [])
     log.append("Determining overall visual style using Gemini...")
     log_message("--- Determining Overall Visual Style (using Gemini) ---")
+    # Force flush logs to ensure they're sent immediately
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
     story = state["story_text"]
     suggested_style = None # Initialize
 
@@ -360,7 +408,11 @@ Output ONLY the suggested style descriptor string, prefixed with a space (e.g., 
 
     try:
         # Invoke the chain with the story text
-        suggested_style = chain.invoke({"story_text": story}).strip()
+        suggested_style = (await chain.ainvoke({"story_text": story})).strip()
+        # Force flush logs to ensure they're sent immediately
+        import sys
+        sys.stdout.flush()
+        sys.stderr.flush()
         # Basic validation: ensure it starts with a space
         if suggested_style and not suggested_style.startswith(" "):
              suggested_style = " " + suggested_style # Add prefix if missing
@@ -383,7 +435,7 @@ Output ONLY the suggested style descriptor string, prefixed with a space (e.g., 
     return {"overall_style": suggested_style, "processing_log": log}
 
 
-def generate_image_prompts(state: StoryAnalysisState) -> StoryAnalysisState:
+async def generate_image_prompts(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     Node to generate image prompts for each scene using Gemini (via Langchain),
     including descriptions of characters present and adding the determined overall style descriptor.
@@ -391,6 +443,10 @@ def generate_image_prompts(state: StoryAnalysisState) -> StoryAnalysisState:
     log = state.get("processing_log", [])
     log.append("Generating image prompts using Gemini...")
     log_message("--- Generating Image Prompts (using Gemini) ---")
+    # Force flush logs to ensure they're sent immediately
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
     scenes = state.get("scenes", [])
     characters_info = state.get("characters", {})
     # Get the determined overall style from the state
@@ -452,7 +508,7 @@ Tone: {tone}""")
                  relevant_desc_text = "\n".join(relevant_descriptions_list)
 
             # Get the base content prompt from the LLM
-            image_prompt_content = chain.invoke({
+            image_prompt_content = await chain.ainvoke({
                 "scene_number": scene_num,
                 "summary": scene.get('summary', ''),
                 "setting": scene.get('setting', ''),
@@ -460,6 +516,10 @@ Tone: {tone}""")
                 "relevant_character_descriptions": relevant_desc_text,
                 "tone": scene.get('tone', '')
             })
+            # Force flush logs to ensure they're sent immediately
+            import sys
+            sys.stdout.flush()
+            sys.stderr.flush()
 
             # Append the determined overall_style
             final_image_prompt = f"{image_prompt_content.strip()}. In the following style {overall_style}"
@@ -480,7 +540,7 @@ Tone: {tone}""")
     return {"scenes": updated_scenes, "processing_log": log}
 
 
-def generate_images_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
+async def generate_images_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     Node to generate images based on prompts using the Google GenAI API
     and save them locally.
@@ -488,6 +548,10 @@ def generate_images_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
     log = state.get("processing_log", [])
     log.append("Generating images using Google GenAI...")
     log_message("--- Generating Images (using Google GenAI) ---")
+    # Force flush logs to ensure they're sent immediately
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
     scenes = state.get("scenes", [])
     updated_scenes = []
 
@@ -521,7 +585,11 @@ def generate_images_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
                               response_modalities=['Text', 'Image'], # Both Text and Image as per https://ai.google.dev/gemini-api/docs/image-generation#gemini
                             )
                         )
-                time.sleep(8) #Gemini-2.0-flash has rate limit of 10 per minute
+                await asyncio.sleep(8) #Gemini-2.0-flash has rate limit of 10 per minute
+                # Force flush logs to ensure they're sent immediately
+                import sys
+                sys.stdout.flush()
+                sys.stderr.flush()
                 # Process the response to find and save the image
                 image_saved = False
                 # Check if candidates exist and have content parts
@@ -568,13 +636,17 @@ def generate_images_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
 # ---  Audio Generation ---
 
 
-def generate_audio_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
+async def generate_audio_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
     """
     Node to generate audio for a scene
     """
     log = state.get("processing_log", [])
     log.append("Generating audio ...")
     log_message("--- Generating Audio ---")
+    # Force flush logs to ensure they're sent immediately
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
     scenes = state.get("scenes", [])
     updated_scenes = []
 
@@ -591,11 +663,24 @@ def generate_audio_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
                 
                 generated_audio_array = tts_model.tts(scene_text)    
                 
+                # Force flush logs to ensure they're sent immediately
+                import sys
+                sys.stdout.flush()
+                sys.stderr.flush()    
+                
 
                 # ==========================================================
 
                 log_message(f"Saving audio for scene {scene_num}")
                 log.append(f"Audio generation for scene {scene_num}.")
+                
+                # Force flush logs to ensure they're sent immediately
+                import sys
+                sys.stdout.flush()
+                sys.stderr.flush()
+                
+                # Yield control to allow event loop to process log streaming
+                await asyncio.sleep(0.01)
 
             except Exception as e:
                 log.append(f"Error during audio generation for scene {scene_num}: {e}")
@@ -613,7 +698,6 @@ def generate_audio_for_scenes(state: StoryAnalysisState) -> StoryAnalysisState:
     return {"scenes": updated_scenes, "processing_log": log}
 
 def create_graph():
-    initialize_models()
     workflow = StateGraph(StoryAnalysisState)
     # Add the nodes
     workflow.add_node("read_story", read_story)
