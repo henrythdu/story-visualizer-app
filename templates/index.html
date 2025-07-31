@@ -6,12 +6,15 @@
     <title>Story Visualizer</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.js"></script>
     <style>
         :root {
             --bs-body-bg: #121212;
             --bs-body-color: #e0e0e0;
+            --bs-body-color-muted: #b0b0b0;
             --bs-card-bg: #1e1e1e;
             --bs-card-border-color: #333;
+            --bs-panel-bg: #252525;
             --bs-form-control-bg: #2d2d2d;
             --bs-form-control-color: #e0e0e0;
             --bs-form-control-border-color: #444;
@@ -19,11 +22,104 @@
             --bs-btn-primary-border-color: #375a7f;
             --bs-btn-primary-hover-bg: #2c4a69;
             --bs-btn-primary-hover-border-color: #2c4a69;
+            --bs-btn-secondary-bg: #495057;
+            --bs-btn-secondary-hover-bg: #3a4047;
+            --bs-btn-success-bg: #28a745;
+            --bs-btn-success-hover-bg: #1e7e34;
+            --bs-link-color: #4dabf7;
+            --bs-link-hover-color: #22b8cf;
+            --bs-animation-slow: 0.3s;
+            --bs-animation-fast: 0.15s;
+            --bs-font-family-sans-serif: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --bs-font-family-monospace: 'Courier New', monospace;
+            --bs-font-size-base: 0.875rem;
+            --bs-font-size-sm: 0.8125rem;
+            --bs-font-size-lg: 0.9375rem;
+            --bs-font-weight-light: 300;
+            --bs-font-weight-normal: 400;
+            --bs-font-weight-semibold: 500;
+            --bs-font-weight-bold: 700;
+        }
+        
+        /* Responsive breakpoints */
+        @media (max-width: 768px) {
+            :root {
+                --bs-font-size-base: 0.8125rem;
+                --bs-font-size-sm: 0.75rem;
+                --bs-font-size-lg: 0.875rem;
+            }
+            
+            .container-fluid {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            
+            .card-body {
+                padding: 1.5rem !important;
+            }
+            
+            .header {
+                padding: 1.5rem 0 !important;
+                margin-bottom: 1.5rem !important;
+            }
+            
+            #logContainer {
+                height: 300px !important;
+            }
+            
+            .processing-spinner {
+                padding: 2rem 1rem !important;
+            }
+            
+            .btn-primary {
+                padding: 0.6rem 1.2rem !important;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            :root {
+                --bs-font-size-base: 0.75rem;
+                --bs-font-size-sm: 0.6875rem;
+                --bs-font-size-lg: 0.8125rem;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem !important;
+            }
+            
+            .card-header {
+                padding: 1rem !important;
+            }
+            
+            .form-control, .form-select {
+                font-size: 0.75rem !important;
+                padding: 0.75rem !important;
+            }
+            
+            .btn {
+                font-size: 0.75rem !important;
+                padding: 0.5rem 1rem !important;
+            }
+            
+            #logContainer {
+                height: 250px !important;
+            }
+            
+            .processing-spinner p {
+                font-size: 0.875rem !important;
+            }
+            
+            .position-absolute .fs-1 {
+                font-size: 1.5rem !important;
+            }
         }
         
         body {
             background-color: var(--bs-body-bg);
             color: var(--bs-body-color);
+            font-family: var(--bs-font-family-sans-serif);
+            font-size: var(--bs-font-size-base);
+            font-weight: var(--bs-font-weight-normal);
             min-height: 100vh;
             padding-bottom: 2rem;
         }
@@ -37,6 +133,9 @@
             background-color: var(--bs-form-control-bg);
             color: var(--bs-form-control-color);
             border-color: var(--bs-form-control-border-color);
+            font-family: var(--bs-font-family-sans-serif);
+            font-size: var(--bs-font-size-base);
+            font-weight: var(--bs-font-weight-normal);
         }
         
         .form-control:focus, .form-select:focus {
@@ -46,14 +145,57 @@
             box-shadow: 0 0 0 0.25rem rgba(55, 90, 127, 0.25);
         }
         
+        .form-control::placeholder {
+            color: #a0a0a0 !important;
+            opacity: 0.9;
+        }
+        
+        label {
+            font-family: var(--bs-font-family-sans-serif);
+            font-size: var(--bs-font-size-lg);
+            font-weight: var(--bs-font-weight-semibold);
+            color: var(--bs-body-color);
+        }
+        
+        .form-text {
+            font-family: var(--bs-font-family-sans-serif);
+            font-size: var(--bs-font-size-sm);
+            font-weight: var(--bs-font-weight-normal);
+            color: var(--bs-body-color-muted);
+        }
+        
         .btn-primary {
             background-color: var(--bs-btn-primary-bg);
             border-color: var(--bs-btn-primary-border-color);
+            font-family: var(--bs-font-family-sans-serif);
+            font-size: var(--bs-font-size-base);
+            font-weight: var(--bs-font-weight-semibold);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.75rem 1.5rem;
         }
         
         .btn-primary:hover {
             background-color: var(--bs-btn-primary-hover-bg);
             border-color: var(--bs-btn-primary-hover-border-color);
+        }
+        
+        .btn-secondary {
+            background-color: var(--bs-btn-secondary-bg);
+            font-family: var(--bs-font-family-sans-serif);
+            font-size: var(--bs-font-size-base);
+            font-weight: var(--bs-font-weight-semibold);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .btn-success {
+            background-color: var(--bs-btn-success-bg);
+            font-family: var(--bs-font-family-sans-serif);
+            font-size: var(--bs-font-size-base);
+            font-weight: var(--bs-font-weight-semibold);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
         
         .processing-spinner {
@@ -70,15 +212,25 @@
         }
         
         .header {
-            background: linear-gradient(135deg, #375a7f, #1e1e1e);
+            background: linear-gradient(135deg, var(--bs-btn-primary-bg), #1e1e1e);
             padding: 2rem 0;
             margin-bottom: 2rem;
             border-radius: 0 0 1rem 1rem;
         }
         
         .header h1 {
-            font-weight: 700;
+            font-family: var(--bs-font-family-sans-serif);
+            font-size: var(--bs-font-size-lg);
+            font-weight: var(--bs-font-weight-bold);
             text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            color: white;
+        }
+        
+        .header p {
+            font-family: var(--bs-font-family-sans-serif);
+            font-size: var(--bs-font-size-base);
+            font-weight: var(--bs-font-weight-normal);
+            color: rgba(255, 255, 255, 0.8);
         }
         
         .theme-toggle {
@@ -97,69 +249,163 @@
             display: none;
         }
         
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .spinner-dot {
+            display: inline-block;
+        }
+        
         /* Log styling */
         #logContainer {
-            font-family: 'Courier New', monospace;
+            font-family: var(--bs-font-family-monospace);
+            font-size: var(--bs-font-size-sm);
+            line-height: 1.5;
+            background-color: var(--bs-panel-bg);
+            border-radius: 0.5rem;
+            height: 400px;
+            overflow-y: auto;
+            padding: 1rem;
+            border: 1px solid var(--bs-card-border-color);
+            transition: border-color var(--bs-animation-slow) ease;
         }
         
         .log-entry {
             margin-bottom: 0.25rem;
             padding: 0.1rem 0;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid var(--bs-card-border-color);
+            transition: all var(--bs-animation-fast) ease;
+        }
+        
+        .log-entry:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 0.25rem;
+            padding-left: 0.25rem;
         }
         
         .log-entry:last-child {
             border-bottom: none;
         }
+        
+        .log-entry.error {
+            color: #ff6b6b;
+        }
+        
+        .log-entry.info {
+            color: var(--bs-link-color);
+        }
+        
+        .log-entry.success {
+            color: #28a745;
+        }
     </style>
 </head>
 <body>
-    <div class="header">
+    <div class="header py-4">
         <div class="container">
             <div class="d-flex justify-content-between align-items-center">
-                <h1 class="text-white mb-0">Story Visualizer</h1>
-                <button id="themeToggle" class="btn btn-outline-light" title="Toggle theme">
-                    <i class="bi bi-moon-fill"></i>
-                </button>
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-play-circle fs-2 me-2" style="color: var(--bs-logo-color);"></i>
+                    <h1 class="text-white mb-0 fw-bold">Story Visualizer</h1>
+                </div>
+                <div class="btn-group" role="group">
+                    <button id="themeToggle" class="btn btn-outline-light btn-sm rounded-circle" title="Toggle theme">
+                        <i class="bi bi-moon-fill"></i>
+                    </button>
+                    <button id="newStoryBtn" class="btn btn-outline-light btn-sm rounded-circle" title="Start new story">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </div>
             </div>
-            <p class="text-white-50 mt-2 mb-0">Transform your stories into visual narratives</p>
+            <p class="text-white-50 mt-2 mb-0 fs-5">Transform your stories into immersive visual narratives</p>
         </div>
     </div>
     
-    <div class="container-fluid">
+    <div class="container-fluid px-4">
         <div class="row justify-content-center">
             <div class="col-lg-8">
-                <div class="card shadow">
-                    <div class="card-header bg-dark text-white">
-                        <h5 class="mb-0">Enter Your Story</h5>
+                <div class="card shadow-lg border-0 rounded-4 mb-4">
+                    <div class="card-header bg-dark text-white py-4 rounded-top">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-chat-dots fs-3 me-3"></i>
+                            <h3 class="mb-0 fw-semibold">Story Input</h3>
+                        </div>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-4">
                         <form id="storyForm">
-                            <div class="mb-3">
-                                <label for="storyText" class="form-label">Story Text</label>
-                                <textarea class="form-control" id="storyText" name="story_text" rows="8" 
-                                    placeholder="Paste your short story here..."></textarea>
+                            <div class="mb-4">
+                                <label for="storyText" class="form-label fs-5 fw-medium d-flex align-items-center">
+                                    <i class="bi bi-file-text me-2"></i>Story Text
+                                </label>
+                                <div class="position-relative">
+                                    <textarea class="form-control border-0 shadow-sm py-3" id="storyText" name="story_text" rows="6" placeholder="Paste your short story here..." style="min-height: 150px;"></textarea>
+                                    <div class="position-absolute end-0 top-0 mt-2 me-2">
+                                        <button type="button" class="btn btn-sm btn-outline-primary rounded-circle" id="clearStoryBtn" title="Clear story text">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-text mt-2 d-flex align-items-center">
+                                    <i class="bi bi-info-circle me-2"></i>Enter your story text to begin visualizing
+                                </div>
                             </div>
                             
-                            <div class="mb-3">
-                                <label for="apiKey" class="form-label">Google API Key (Optional)</label>
-                                <input type="password" class="form-control" id="apiKey" name="api_key" 
-                                    placeholder="Enter your Google API key (if not using default)">
-                                <div class="form-text">You can use your own Google API key for image generation. If left blank, the default key will be used.</div>
+                            <div class="mb-4">
+                                <label for="apiKey" class="form-label fs-5 fw-medium d-flex align-items-center">
+                                    <i class="bi bi-key me-2"></i>Google API Key (Optional)
+                                </label>
+                                <div class="position-relative">
+                                    <input type="password" class="form-control border-0 shadow-sm py-3" id="apiKey" name="api_key" placeholder="Enter your Google API key (if not using default)">
+                                    <div class="position-absolute end-0 top-0 mt-2 me-2">
+                                        <button type="button" class="btn btn-sm btn-outline-primary rounded-circle" id="clearApiKeyBtn" title="Clear API key">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-text mt-2 d-flex align-items-center">
+                                    <i class="bi bi-shield-lock me-2"></i>You can use your own Google API key for image generation. If left blank, the default key will be used.
+                                </div>
                             </div>
                             
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary" id="processBtn">
+                            <div class="d-grid mt-4">
+                                <button type="submit" class="btn btn-lg btn-primary shadow-sm w-100" id="processBtn" style="background: linear-gradient(135deg, var(--bs-btn-primary-bg), var(--bs-btn-primary-hover-bg)); border: none; transition: transform var(--bs-animation-fast) ease;">
                                     <i class="bi bi-play-circle me-2"></i>Visualize Story
                                 </button>
                             </div>
                         </form>
                         
-                        <div class="processing-spinner text-center my-4" id="processingSpinner">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Processing...</span>
+                        <div class="processing-spinner text-center my-4 p-5" id="processingSpinner">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="position-relative" style="width: 100px; height: 100px;">
+                                    <!-- Outer spinning ring -->
+                                    <div class="position-absolute top-0 start-0 w-100 h-100" style="border: 5px solid rgba(55, 90, 127, 0.2); border-radius: 50%;"></div>
+                                    <div class="position-absolute top-0 start-0 w-100 h-100" style="border: 5px solid transparent; border-top-color: var(--bs-link-color); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                                    <!-- Inner bouncing robot icon -->
+                                    <i class="bi bi-robot position-absolute top-50 start-50 translate-middle fs-1" style="color: var(--bs-link-color); animation: bounce 1s ease-in-out infinite;"></i>
+                                </div>
+                                <p class="mt-4 mb-0 fs-5 fw-semibold" style="color: var(--bs-body-color);">Creating your story visualization...</p>
+                                <div class="text-center mt-3">
+                                    <div class="d-flex justify-content-center gap-2">
+                                        <div class="spinner-dot" style="width: 12px; height: 12px; background-color: var(--bs-link-color); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite;"></div>
+                                        <div class="spinner-dot" style="width: 12px; height: 12px; background-color: var(--bs-link-color); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; animation-delay: 0.2s;"></div>
+                                        <div class="spinner-dot" style="width: 12px; height: 12px; background-color: var(--bs-link-color); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; animation-delay: 0.4s;"></div>
+                                    </div>
+                                </div>
+                                <p class="text-muted mt-3 mb-0" style="font-size: 0.85rem;">Processing your story - this may take a moment</p>
                             </div>
-                            <p class="mt-2 mb-0">Creating your visual story... This may take a minute.</p>
                         </div>
                         
                         <div class="error-message" id="errorMessage"></div>
@@ -194,7 +440,7 @@
                         <button id="clearLogBtn" class="btn btn-sm btn-outline-light">Clear</button>
                     </div>
                     <div class="card-body p-0">
-                        <div id="logContainer" class="p-3" style="height: 400px; overflow-y: auto; background-color: #1e1e1e; font-family: monospace; font-size: 0.85rem; color: #e0e0e0;">
+                        <div id="logContainer" class="p-3" style="height: 400px; overflow-y: auto; background-color: var(--bs-panel-bg); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 0.85rem; color: var(--bs-body-color); border-radius: 0.5rem; transition: border-color var(--bs-animation-slow) ease;">
                             <div id="logContent" class="mb-0"></div>
                         </div>
                     </div>
@@ -232,7 +478,7 @@
             // Show processing spinner and disable button
             processingSpinner.style.display = 'block';
             processBtn.disabled = true;
-            processBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing...';
+            processBtn.innerHTML = '<i class="bi bi-three-dots" style="color: var(--bs-body-color); animation: pulse 1.5s ease-in-out infinite;"></i><span class="ms-1">Processing...</span>';
             
             try {
                 const formData = new FormData();
@@ -270,7 +516,7 @@
                 // Hide processing spinner and enable button on error
                 processingSpinner.style.display = 'none';
                 processBtn.disabled = false;
-                processBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Visualize Story';
+                processBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i><span class="ms-1">Visualize Story</span>';
             }
         });
         
@@ -313,6 +559,16 @@
                 const logEntry = document.createElement('div');
                 logEntry.textContent = data.message;
                 logEntry.className = 'log-entry';
+                
+                // Add color class based on log type
+                if (data.message.toLowerCase().includes('error') || data.message.toLowerCase().includes('fail')) {
+                    logEntry.classList.add('error');
+                } else if (data.message.toLowerCase().includes('success') || data.message.toLowerCase().includes('complete') || data.message.toLowerCase().includes('ready')) {
+                    logEntry.classList.add('success');
+                } else if (data.message.toLowerCase().includes('info') || data.message.toLowerCase().includes('status')) {
+                    logEntry.classList.add('info');
+                }
+                
                 logContent.appendChild(logEntry);
                 
                 // Scroll to bottom
@@ -360,7 +616,7 @@
                             const processBtn = document.getElementById('processBtn');
                             processingSpinner.style.display = 'none';
                             processBtn.disabled = false;
-                            processBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Visualize Story';
+                            processBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i><span class="ms-1">Visualize Story</span>';
                         }
                     }
                 } catch (error) {
