@@ -6,6 +6,7 @@
     <title>Story Visualizer</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.css">
     <script src="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.js"></script>
     <style>
         :root {
@@ -408,8 +409,7 @@
                             </div>
                         </div>
                         
-                        <div class="error-message" id="errorMessage"></div>
-                    </div>
+                                            </div>
                 </div>
                 
                 <div id="videoContainer" class="card shadow mt-4">
@@ -455,23 +455,41 @@
         let processId = null;
         let pollInterval = null;
         
+        // Toast notification function
+        function showToast(message, type = 'success') {
+            const backgroundColor = type === 'success' ? 'linear-gradient(to right, #00b09b, #96c93d)' : 
+                                    type === 'error' ? 'linear-gradient(to right, #ff416c, #ff4b2b)' : 
+                                    'linear-gradient(to right, #00b09b, #96c93d)'; // default to success
+            
+            Toastify({
+                text: message,
+                duration: 3000,
+                close: true,
+                gravity: "top",
+                position: "right",
+                stopOnFocus: true,
+                style: {
+                    background: backgroundColor,
+                    borderRadius: "8px",
+                    fontWeight: "500",
+                    fontSize: "0.875rem",
+                }
+            }).showToast();
+        }
+        
         document.getElementById('storyForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const storyText = document.getElementById('storyText').value;
             const processBtn = document.getElementById('processBtn');
             const processingSpinner = document.getElementById('processingSpinner');
-            const errorMessage = document.getElementById('errorMessage');
             const logContent = document.getElementById('logContent');
             
             // Clear previous logs
             logContent.innerHTML = '';
             
-            // Hide any previous error message
-            errorMessage.style.display = 'none';
-            
             if (!storyText.trim()) {
-                showError('Please enter a story');
+                showToast('Please enter a story', 'error');
                 return;
             }
             
@@ -479,6 +497,9 @@
             processingSpinner.style.display = 'block';
             processBtn.disabled = true;
             processBtn.innerHTML = '<i class="bi bi-three-dots" style="color: var(--bs-body-color); animation: pulse 1.5s ease-in-out infinite;"></i><span class="ms-1">Processing...</span>';
+            
+            // Show notification that processing has started
+            showToast('Processing your story...', 'success');
             
             try {
                 const formData = new FormData();
@@ -512,7 +533,7 @@
                 startVideoPolling(processId);
             } catch (error) {
                 console.error('Error:', error);
-                showError('Error processing story: ' + error.message);
+                showToast('Error processing story: ' + error.message, 'error');
                 // Hide processing spinner and enable button on error
                 processingSpinner.style.display = 'none';
                 processBtn.disabled = false;
@@ -610,6 +631,7 @@
                             
                             // Display the video
                             displayVideo(result.video_id);
+                            showToast('Your story visualization is ready!', 'success');
                             
                             // Hide processing spinner and enable button
                             const processingSpinner = document.getElementById('processingSpinner');
@@ -651,9 +673,8 @@
         }
         
         function showError(message) {
-            const errorMessage = document.getElementById('errorMessage');
-            errorMessage.textContent = message;
-            errorMessage.style.display = 'block';
+            // Use toast notification instead of error message div
+            showToast(message, 'error');
         }
         
         // New story button
@@ -676,11 +697,28 @@
             
             // Clear logs
             document.getElementById('logContent').innerHTML = '';
+            
+            // Show success message
+            showToast('Ready for a new story!', 'success');
         });
         
         // Clear log button
         document.getElementById('clearLogBtn').addEventListener('click', function() {
             document.getElementById('logContent').innerHTML = '';
+            showToast('Log cleared', 'success');
+        });
+        
+        // Clear story text button
+        document.getElementById('clearStoryBtn').addEventListener('click', function() {
+            document.getElementById('storyText').value = '';
+            document.getElementById('storyText').focus();
+            showToast('Story text cleared', 'success');
+        });
+        
+        // Clear API key button
+        document.getElementById('clearApiKeyBtn').addEventListener('click', function() {
+            document.getElementById('apiKey').value = '';
+            showToast('API key cleared', 'success');
         });
         
         // Theme toggle
